@@ -6,9 +6,9 @@ from app.services.base_source import PaperSource
 
 class ArxivService(PaperSource):
     """arXiv API service for searching papers"""
-    
-    BASE_URL = "http://export.arxiv.org/api/query"
-    
+
+    BASE_URL = "https://export.arxiv.org/api/query"
+
     def __init__(self):
         super().__init__()
         self.source_name = "arxiv"
@@ -18,19 +18,23 @@ class ArxivService(PaperSource):
         params = {
             "search_query": f"all:{query}",
             "start": 0,
-            "max_results": min(limit, 50),  # arXiv max per request
+            "max_results": min(limit, 200),  # arXiv supports up to 200 results per request
             "sortBy": "relevance",
             "sortOrder": "descending"
         }
-        
+
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(
+                timeout=30.0,
+                http2=False,  # Disable HTTP2 to avoid Windows connection issues
+                transport=httpx.AsyncHTTPTransport(retries=1)
+            ) as client:
                 response = await client.get(self.BASE_URL, params=params)
                 response.raise_for_status()
-                
+
                 papers = self._parse_arxiv_xml(response.text)
                 return [self.normalize_paper(paper) for paper in papers]
-                
+
         except Exception as e:
             print(f"arXiv search error: {str(e)}")
             return []
@@ -41,17 +45,21 @@ class ArxivService(PaperSource):
             "id_list": arxiv_id,
             "max_results": 1
         }
-        
+
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(
+                timeout=30.0,
+                http2=False,  # Disable HTTP2 to avoid Windows connection issues
+                transport=httpx.AsyncHTTPTransport(retries=1)
+            ) as client:
                 response = await client.get(self.BASE_URL, params=params)
                 response.raise_for_status()
-                
+
                 papers = self._parse_arxiv_xml(response.text)
                 if papers:
                     return self.normalize_paper(papers[0])
                 return None
-                
+
         except Exception as e:
             print(f"arXiv get paper error: {str(e)}")
             return None

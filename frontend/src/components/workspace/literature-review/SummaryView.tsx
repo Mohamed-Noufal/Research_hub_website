@@ -1,0 +1,375 @@
+import React, { useState } from 'react';
+import { ChevronDown, ChevronRight, Star, Check, Loader2 } from 'lucide-react';
+import { Badge } from '../../ui/badge';
+import type { ResearchPaper } from './types';
+import { useUpdateCustomField } from '../../../hooks/useTableConfig';
+
+interface EditableCell {
+    paperId: number;
+    field: string;
+}
+
+export default function SummaryView({ papers, projectId }: { papers: ResearchPaper[], projectId?: number }) {
+    const [expandedRow, setExpandedRow] = useState<number | null>(null);
+    const [editingCell, setEditingCell] = useState<EditableCell | null>(null);
+    const [editValue, setEditValue] = useState('');
+    const [savingCell, setSavingCell] = useState<EditableCell | null>(null);
+    const [savedCell, setSavedCell] = useState<EditableCell | null>(null);
+
+    const updateCustomField = useUpdateCustomField();
+
+    const handleCellClick = (paperId: number, field: string, currentValue: any, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setEditingCell({ paperId, field });
+        setEditValue(String(currentValue || ''));
+    };
+
+    const handleSave = async (paperId: number, field: string) => {
+        if (!projectId) return;
+
+        setSavingCell({ paperId, field });
+
+        try {
+            await updateCustomField.mutateAsync({
+                projectId: String(projectId),
+                paperId: String(paperId),
+                fieldUpdate: {
+                    field_id: field,
+                    value: editValue
+                }
+            });
+
+            setSavedCell({ paperId, field });
+            setTimeout(() => setSavedCell(null), 2000);
+        } catch (error) {
+            console.error('Failed to save:', error);
+        } finally {
+            setSavingCell(null);
+            setEditingCell(null);
+        }
+    };
+
+    const handleBlur = (paperId: number, field: string) => {
+        handleSave(paperId, field);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent, paperId: number, field: string) => {
+        if (e.key === 'Enter') {
+            handleSave(paperId, field);
+        } else if (e.key === 'Escape') {
+            setEditingCell(null);
+        }
+    };
+
+    const isEditing = (paperId: number, field: string) => {
+        return editingCell?.paperId === paperId && editingCell?.field === field;
+    };
+
+    const isSaving = (paperId: number, field: string) => {
+        return savingCell?.paperId === paperId && savingCell?.field === field;
+    };
+
+    const isSaved = (paperId: number, field: string) => {
+        return savedCell?.paperId === paperId && savedCell?.field === field;
+    };
+
+    return (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                    <thead className="bg-gray-50 border-b border-gray-200 text-xs uppercase text-gray-500 font-semibold">
+                        <tr>
+                            <th className="px-4 py-3 w-8"></th>
+                            <th className="px-4 py-3">Title & Authors</th>
+                            <th className="px-4 py-3">Year</th>
+                            <th className="px-4 py-3">Methodology</th>
+                            <th className="px-4 py-3">Sample</th>
+                            <th className="px-4 py-3">Key Findings</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                        {papers.map((paper) => (
+                            <React.Fragment key={paper.id}>
+                                <tr
+                                    className="hover:bg-gray-50 cursor-pointer transition-colors"
+                                    onClick={() => setExpandedRow(expandedRow === paper.id ? null : paper.id)}
+                                >
+                                    {/* Expand/Collapse Icon */}
+                                    <td className="px-4 py-3">
+                                        {expandedRow === paper.id ? (
+                                            <ChevronDown className="w-4 h-4 text-gray-400" />
+                                        ) : (
+                                            <ChevronRight className="w-4 h-4 text-gray-400" />
+                                        )}
+                                    </td>
+
+                                    {/* Title & Authors - Read-only */}
+                                    <td className="px-4 py-3 font-medium text-gray-900">
+                                        <div className="line-clamp-1">{paper.title}</div>
+                                        <div className="text-xs text-gray-500 font-normal">{paper.authors[0]} et al.</div>
+                                    </td>
+
+                                    {/* Year - Editable */}
+                                    <td
+                                        className="px-4 py-3 text-gray-600 relative group cursor-pointer"
+                                        onClick={(e) => handleCellClick(paper.id, 'year', paper.year, e)}
+                                    >
+                                        {isEditing(paper.id, 'year') ? (
+                                            <input
+                                                type="number"
+                                                value={editValue}
+                                                onChange={(e) => setEditValue(e.target.value)}
+                                                onBlur={() => handleBlur(paper.id, 'year')}
+                                                onKeyDown={(e) => handleKeyDown(e, paper.id, 'year')}
+                                                className="w-full px-2 py-1 border border-indigo-500 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                autoFocus
+                                            />
+                                        ) : (
+                                            <div className="flex items-center gap-2">
+                                                <span>{paper.custom_fields?.year || paper.year}</span>
+                                                {isSaving(paper.id, 'year') && <Loader2 className="w-3 h-3 animate-spin text-gray-400" />}
+                                                {isSaved(paper.id, 'year') && <Check className="w-3 h-3 text-green-500" />}
+                                            </div>
+                                        )}
+                                    </td>
+
+                                    {/* Methodology - Editable */}
+                                    <td
+                                        className="px-4 py-3 cursor-pointer"
+                                        onClick={(e) => handleCellClick(paper.id, 'methodology', paper.methodology, e)}
+                                    >
+                                        {isEditing(paper.id, 'methodology') ? (
+                                            <input
+                                                type="text"
+                                                value={editValue}
+                                                onChange={(e) => setEditValue(e.target.value)}
+                                                onBlur={() => handleBlur(paper.id, 'methodology')}
+                                                onKeyDown={(e) => handleKeyDown(e, paper.id, 'methodology')}
+                                                className="w-full px-2 py-1 border border-indigo-500 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                autoFocus
+                                            />
+                                        ) : (
+                                            <div className="flex items-center gap-2">
+                                                <Badge variant="secondary" className="font-normal">{paper.custom_fields?.methodology || paper.methodology}</Badge>
+                                                {isSaving(paper.id, 'methodology') && <Loader2 className="w-3 h-3 animate-spin text-gray-400" />}
+                                                {isSaved(paper.id, 'methodology') && <Check className="w-3 h-3 text-green-500" />}
+                                            </div>
+                                        )}
+                                    </td>
+
+                                    {/* Sample Size - Editable */}
+                                    <td
+                                        className="px-4 py-3 text-gray-600 cursor-pointer"
+                                        onClick={(e) => handleCellClick(paper.id, 'sampleSize', paper.sampleSize, e)}
+                                    >
+                                        {isEditing(paper.id, 'sampleSize') ? (
+                                            <input
+                                                type="text"
+                                                value={editValue}
+                                                onChange={(e) => setEditValue(e.target.value)}
+                                                onBlur={() => handleBlur(paper.id, 'sampleSize')}
+                                                onKeyDown={(e) => handleKeyDown(e, paper.id, 'sampleSize')}
+                                                className="w-full px-2 py-1 border border-indigo-500 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                autoFocus
+                                            />
+                                        ) : (
+                                            <div className="flex items-center gap-2">
+                                                <span>{paper.custom_fields?.sampleSize || paper.sampleSize}</span>
+                                                {isSaving(paper.id, 'sampleSize') && <Loader2 className="w-3 h-3 animate-spin text-gray-400" />}
+                                                {isSaved(paper.id, 'sampleSize') && <Check className="w-3 h-3 text-green-500" />}
+                                            </div>
+                                        )}
+                                    </td>
+
+                                    {/* Key Findings - Editable */}
+                                    <td
+                                        className="px-4 py-3 text-gray-600 max-w-xs cursor-pointer"
+                                        onClick={(e) => handleCellClick(paper.id, 'keyFindings', paper.keyFindings, e)}
+                                    >
+                                        {isEditing(paper.id, 'keyFindings') ? (
+                                            <input
+                                                type="text"
+                                                value={editValue}
+                                                onChange={(e) => setEditValue(e.target.value)}
+                                                onBlur={() => handleBlur(paper.id, 'keyFindings')}
+                                                onKeyDown={(e) => handleKeyDown(e, paper.id, 'keyFindings')}
+                                                className="w-full px-2 py-1 border border-indigo-500 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                autoFocus
+                                            />
+                                        ) : (
+                                            <div className="flex items-center gap-2">
+                                                <span className="truncate">{paper.custom_fields?.keyFindings || paper.keyFindings}</span>
+                                                {isSaving(paper.id, 'keyFindings') && <Loader2 className="w-3 h-3 animate-spin text-gray-400" />}
+                                                {isSaved(paper.id, 'keyFindings') && <Check className="w-3 h-3 text-green-500" />}
+                                            </div>
+                                        )}
+                                    </td>
+                                </tr>
+
+                                {/* Expanded Row Details */}
+                                {expandedRow === paper.id && (
+                                    <tr className="bg-gray-50">
+                                        <td colSpan={6} className="px-4 py-4">
+                                            <div className="grid grid-cols-2 gap-4 text-sm">
+                                                {/* Full Title - Editable */}
+                                                <div
+                                                    className="cursor-pointer"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleCellClick(paper.id, 'title', paper.title, e);
+                                                    }}
+                                                >
+                                                    <div className="font-semibold text-gray-900 mb-1">Full Title</div>
+                                                    {isEditing(paper.id, 'title') ? (
+                                                        <textarea
+                                                            value={editValue}
+                                                            onChange={(e) => setEditValue(e.target.value)}
+                                                            onBlur={() => handleBlur(paper.id, 'title')}
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === 'Enter' && e.ctrlKey) {
+                                                                    handleSave(paper.id, 'title');
+                                                                } else if (e.key === 'Escape') {
+                                                                    setEditingCell(null);
+                                                                }
+                                                            }}
+                                                            className="w-full px-2 py-1 border border-indigo-500 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500 min-h-[60px]"
+                                                            autoFocus
+                                                        />
+                                                    ) : (
+                                                        <div className="flex items-start gap-2">
+                                                            <span className="text-gray-700 flex-1">{paper.custom_fields?.title || paper.title}</span>
+                                                            {isSaving(paper.id, 'title') && <Loader2 className="w-3 h-3 animate-spin text-gray-400 mt-1" />}
+                                                            {isSaved(paper.id, 'title') && <Check className="w-3 h-3 text-green-500 mt-1" />}
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* Authors - Editable */}
+                                                <div
+                                                    className="cursor-pointer"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleCellClick(paper.id, 'authors', paper.authors.join(', '), e);
+                                                    }}
+                                                >
+                                                    <div className="font-semibold text-gray-900 mb-1">Authors</div>
+                                                    {isEditing(paper.id, 'authors') ? (
+                                                        <input
+                                                            type="text"
+                                                            value={editValue}
+                                                            onChange={(e) => setEditValue(e.target.value)}
+                                                            onBlur={() => handleBlur(paper.id, 'authors')}
+                                                            onKeyDown={(e) => handleKeyDown(e, paper.id, 'authors')}
+                                                            className="w-full px-2 py-1 border border-indigo-500 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                            autoFocus
+                                                            placeholder="Comma-separated authors"
+                                                        />
+                                                    ) : (
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-gray-700">{paper.custom_fields?.authors || paper.authors.join(', ')}</span>
+                                                            {isSaving(paper.id, 'authors') && <Loader2 className="w-3 h-3 animate-spin text-gray-400" />}
+                                                            {isSaved(paper.id, 'authors') && <Check className="w-3 h-3 text-green-500" />}
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* Venue - Editable */}
+                                                <div
+                                                    className="cursor-pointer"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleCellClick(paper.id, 'venue', paper.venue, e);
+                                                    }}
+                                                >
+                                                    <div className="font-semibold text-gray-900 mb-1">Venue</div>
+                                                    {isEditing(paper.id, 'venue') ? (
+                                                        <input
+                                                            type="text"
+                                                            value={editValue}
+                                                            onChange={(e) => setEditValue(e.target.value)}
+                                                            onBlur={() => handleBlur(paper.id, 'venue')}
+                                                            onKeyDown={(e) => handleKeyDown(e, paper.id, 'venue')}
+                                                            className="w-full px-2 py-1 border border-indigo-500 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                            autoFocus
+                                                        />
+                                                    ) : (
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-gray-700 italic">{paper.custom_fields?.venue || paper.venue}</span>
+                                                            {isSaving(paper.id, 'venue') && <Loader2 className="w-3 h-3 animate-spin text-gray-400" />}
+                                                            {isSaved(paper.id, 'venue') && <Check className="w-3 h-3 text-green-500" />}
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* DOI - Editable */}
+                                                <div
+                                                    className="cursor-pointer"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleCellClick(paper.id, 'doi', paper.doi, e);
+                                                    }}
+                                                >
+                                                    <div className="font-semibold text-gray-900 mb-1">DOI</div>
+                                                    {isEditing(paper.id, 'doi') ? (
+                                                        <input
+                                                            type="text"
+                                                            value={editValue}
+                                                            onChange={(e) => setEditValue(e.target.value)}
+                                                            onBlur={() => handleBlur(paper.id, 'doi')}
+                                                            onKeyDown={(e) => handleKeyDown(e, paper.id, 'doi')}
+                                                            className="w-full px-2 py-1 border border-indigo-500 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono text-xs"
+                                                            autoFocus
+                                                        />
+                                                    ) : (
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-gray-700 font-mono text-xs">{paper.custom_fields?.doi || paper.doi}</span>
+                                                            {isSaving(paper.id, 'doi') && <Loader2 className="w-3 h-3 animate-spin text-gray-400" />}
+                                                            {isSaved(paper.id, 'doi') && <Check className="w-3 h-3 text-green-500" />}
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* Limitations - Editable */}
+                                                <div
+                                                    className="col-span-2 cursor-pointer"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleCellClick(paper.id, 'limitations', paper.limitations, e);
+                                                    }}
+                                                >
+                                                    <div className="font-semibold text-gray-900 mb-1">Limitations</div>
+                                                    {isEditing(paper.id, 'limitations') ? (
+                                                        <textarea
+                                                            value={editValue}
+                                                            onChange={(e) => setEditValue(e.target.value)}
+                                                            onBlur={() => handleBlur(paper.id, 'limitations')}
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === 'Enter' && e.ctrlKey) {
+                                                                    handleSave(paper.id, 'limitations');
+                                                                } else if (e.key === 'Escape') {
+                                                                    setEditingCell(null);
+                                                                }
+                                                            }}
+                                                            className="w-full px-2 py-1 border border-indigo-500 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500 min-h-[60px]"
+                                                            autoFocus
+                                                        />
+                                                    ) : (
+                                                        <div className="flex items-start gap-2">
+                                                            <span className="text-gray-700 flex-1">{paper.custom_fields?.limitations || paper.limitations}</span>
+                                                            {isSaving(paper.id, 'limitations') && <Loader2 className="w-3 h-3 animate-spin text-gray-400 mt-1" />}
+                                                            {isSaved(paper.id, 'limitations') && <Check className="w-3 h-3 text-green-500 mt-1" />}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )}
+                            </React.Fragment>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+}

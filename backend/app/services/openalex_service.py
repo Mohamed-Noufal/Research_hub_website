@@ -10,28 +10,42 @@ class OpenAlexService(PaperSource):
     def __init__(self, email: Optional[str] = None):
         super().__init__()
         self.source_name = "openalex"
+        self.base_url = self.BASE_URL
         self.email = email  # Polite pool access (faster rate limits)
-    
+
     async def search(self, query: str, limit: int = 20) -> List[Dict[str, Any]]:
         """Search OpenAlex papers"""
-        url = f"{self.BASE_URL}/works"
+        url = f"{self.base_url}/works"
         params = {
             "search": query,
             "per_page": min(limit, 200),  # API max is 200
-            "sort": "relevance_score:desc",
-            "mailto": self.email  # For polite pool
+            "sort": "relevance_score:desc"
         }
-        
+
+        # Add mailto for polite pool (higher rate limits)
+        if self.email:
+            params["mailto"] = self.email
+
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(url, params=params)
+
+                # Log detailed error info for debugging
+                if response.status_code >= 400:
+                    print(f"OpenAlex API Error - Status: {response.status_code}")
+                    print(f"OpenAlex API Error - URL: {response.url}")
+                    try:
+                        error_body = response.json()
+                        print(f"OpenAlex API Error - Body: {error_body}")
+                    except:
+                        print(f"OpenAlex API Error - Text: {response.text[:500]}")
+
                 response.raise_for_status()
-                
                 data = response.json()
                 papers = data.get("results", [])
-                
+
                 return [self.normalize_paper(paper) for paper in papers if paper]
-                
+
         except Exception as e:
             print(f"OpenAlex search error: {str(e)}")
             return []

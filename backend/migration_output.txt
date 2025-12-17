@@ -1,0 +1,282 @@
+python : WARNING:  database 
+"research_db" has a collation version 
+mismatch
+At line:1 char:1
++ python 
+apply_lit_review_migrations.py 2>&1 | 
+Out-File -FilePath migra ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~
+    + CategoryInfo          : NotSpec 
+   ified: (WARNING:  datab...ersion   
+  mismatch:String) [], RemoteExcept   
+ ion
+    + FullyQualifiedErrorId : NativeC 
+   ommandError
+ 
+DETAIL:  The database was created 
+using collation version 2.41, but the 
+operating system provides version 
+2.36.
+HINT:  Rebuild all objects in this 
+database that use the default 
+collation and run ALTER DATABASE 
+research_db REFRESH COLLATION 
+VERSION, or build PostgreSQL with the 
+right library version.
+Applying missing literature review migrations...
+======================================================================
+
+Applying 015_comparison_data.sql (Comparison Tab)...
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Roaming\
+Python\Python313\site-packages\sqlalch
+emy\engine\base.py", line 1967, in 
+_exec_single_context
+    self.dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor, str_statement, 
+effective_parameters, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\User\AppData\Roaming\
+Python\Python313\site-packages\sqlalch
+emy\engine\default.py", line 951, in 
+do_execute
+    cursor.execute(statement, 
+parameters)
+    
+~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+psycopg2.errors.DuplicateObject: 
+trigger 
+"comparison_configs_updated_at" for 
+relation "comparison_configs" already 
+exists
+
+
+The above exception was the direct 
+cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\LLM\end-end\paper-search\ba
+ckend\apply_lit_review_migrations.py",
+ line 39, in apply_migrations
+    conn.execute(text(migration_sql))
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\AppData\Roaming\
+Python\Python313\site-packages\sqlalch
+emy\engine\base.py", line 1419, in 
+execute
+    return meth(
+        self,
+        distilled_parameters,
+        execution_options or 
+NO_OPTIONS,
+    )
+  File "C:\Users\User\AppData\Roaming\
+Python\Python313\site-packages\sqlalch
+emy\sql\elements.py", line 526, in 
+_execute_on_connection
+    return 
+connection._execute_clauseelement(
+           
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self, distilled_params, 
+execution_options
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\User\AppData\Roaming\
+Python\Python313\site-packages\sqlalch
+emy\engine\base.py", line 1641, in 
+_execute_clauseelement
+    ret = self._execute_context(
+        dialect,
+    ...<8 lines>...
+        cache_hit=cache_hit,
+    )
+  File "C:\Users\User\AppData\Roaming\
+Python\Python313\site-packages\sqlalch
+emy\engine\base.py", line 1846, in 
+_execute_context
+    return self._exec_single_context(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^
+        dialect, context, statement, 
+parameters
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^
+    )
+    ^
+  File "C:\Users\User\AppData\Roaming\
+Python\Python313\site-packages\sqlalch
+emy\engine\base.py", line 1986, in 
+_exec_single_context
+    self._handle_dbapi_exception(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        e, str_statement, 
+effective_parameters, cursor, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\User\AppData\Roaming\
+Python\Python313\site-packages\sqlalch
+emy\engine\base.py", line 2355, in 
+_handle_dbapi_exception
+    raise sqlalchemy_exception.with_tr
+aceback(exc_info[2]) from e
+  File "C:\Users\User\AppData\Roaming\
+Python\Python313\site-packages\sqlalch
+emy\engine\base.py", line 1967, in 
+_exec_single_context
+    self.dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor, str_statement, 
+effective_parameters, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\User\AppData\Roaming\
+Python\Python313\site-packages\sqlalch
+emy\engine\default.py", line 951, in 
+do_execute
+    cursor.execute(statement, 
+parameters)
+    
+~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+sqlalchemy.exc.ProgrammingError: 
+(psycopg2.errors.DuplicateObject) 
+trigger 
+"comparison_configs_updated_at" for 
+relation "comparison_configs" already 
+exists
+
+[SQL: -- Migration: Comparison Tab 
+Backend Integration
+-- Creates tables for comparison 
+configurations and custom attributes
+
+-- Comparison Configurations Table
+CREATE TABLE IF NOT EXISTS 
+comparison_configs (
+    id UUID PRIMARY KEY DEFAULT 
+gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES 
+users(id) ON DELETE CASCADE,
+    project_id UUID NOT NULL,
+    
+    selected_paper_ids TEXT[] NOT 
+NULL DEFAULT '{}', -- Array of paper 
+IDs
+    insights_similarities TEXT, -- 
+Editable similarities text
+    insights_differences TEXT, -- 
+Editable differences text
+    
+    created_at TIMESTAMP DEFAULT 
+NOW(),
+    updated_at TIMESTAMP DEFAULT 
+NOW(),
+    UNIQUE(user_id, project_id)
+);
+
+-- Comparison Attributes Table (for 
+custom comparison rows)
+CREATE TABLE IF NOT EXISTS 
+comparison_attributes (
+    id UUID PRIMARY KEY DEFAULT 
+gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES 
+users(id) ON DELETE CASCADE,
+    project_id UUID NOT NULL,
+    paper_id TEXT NOT NULL,
+    
+    attribute_name VARCHAR(100) NOT 
+NULL,
+    attribute_value TEXT,
+    
+    created_at TIMESTAMP DEFAULT 
+NOW(),
+    updated_at TIMESTAMP DEFAULT 
+NOW(),
+    UNIQUE(user_id, project_id, 
+paper_id, attribute_name)
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS 
+idx_comparison_configs_project ON 
+comparison_configs(project_id, 
+user_id);
+CREATE INDEX IF NOT EXISTS 
+idx_comparison_attributes_project ON 
+comparison_attributes(project_id, 
+user_id);
+
+-- Triggers
+CREATE OR REPLACE FUNCTION 
+update_comparison_configs_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER 
+comparison_configs_updated_at
+    BEFORE UPDATE ON 
+comparison_configs
+    FOR EACH ROW
+    EXECUTE FUNCTION update_comparison
+_configs_updated_at();
+
+CREATE OR REPLACE FUNCTION update_comp
+arison_attributes_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER 
+comparison_attributes_updated_at
+    BEFORE UPDATE ON 
+comparison_attributes
+    FOR EACH ROW
+    EXECUTE FUNCTION update_comparison
+_attributes_updated_at();
+]
+(Background on this error at: 
+https://sqlalche.me/e/20/f405)
+
+During handling of the above 
+exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\LLM\end-end\paper-search\ba
+ckend\apply_lit_review_migrations.py",
+ line 60, in <module>
+    success = apply_migrations()
+  File "D:\LLM\end-end\paper-search\ba
+ckend\apply_lit_review_migrations.py",
+ line 51, in apply_migrations
+    print(f"\n\u274c Migration 
+failed: {e}")
+    
+~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\encodings\cp1
+256.py", line 19, in encode
+    return codecs.charmap_encode(input
+,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec 
+can't encode character '\u274c' in 
+position 2: character maps to 
+<undefined>

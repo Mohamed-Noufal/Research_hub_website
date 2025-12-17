@@ -1,4 +1,5 @@
 import httpx
+import asyncio
 from typing import List, Dict, Any, Optional
 from app.services.base_source import PaperSource
 
@@ -14,32 +15,33 @@ class SemanticScholarService(PaperSource):
         self.headers = {}
         if api_key:
             self.headers["x-api-key"] = api_key
+
+        # Semantic Scholar has strict rate limits - be very conservative
+        # Free tier: ~1 request per second, with API key: up to 5 per second
+        # We'll use 0.5 req/sec (every 2 seconds) to be safe and maximize results per request
+        from app.utils.http_client import AcademicAPIClient
+        rate_limit = 5.0 if api_key else 0.5  # 5 req/sec with key, 0.5 req/sec without
+        self.client = AcademicAPIClient(
+            user_agent="Academic-Search-Bot/1.0 (research@example.com)",
+            rate_limit_per_second=rate_limit
+        )
     
     async def search(self, query: str, limit: int = 20) -> List[Dict[str, Any]]:
-        """Search Semantic Scholar papers"""
+        """Search Semantic Scholar papers with optimized rate limiting"""
         url = f"{self.BASE_URL}/paper/search"
         params = {
             "query": query,
-            "limit": min(limit, 100),  # API max is 100
+            "limit": min(limit, 100),  # API max is 100 - get maximum per request
             "fields": "paperId,title,abstract,authors,year,citationCount,venue,openAccessPdf,externalIds"
         }
-        
+
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(url, params=params, headers=self.headers)
-                response.raise_for_status()
-                
-                data = response.json()
+            async with self.client:
+                response, data = await self.client.get(url, params=params, headers=self.headers)
+
                 papers = data.get("data", [])
-                
                 return [self.normalize_paper(paper) for paper in papers if paper]
-                
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 429:
-                print("Semantic Scholar rate limit hit")
-            else:
-                print(f"Semantic Scholar search error: {str(e)}")
-            return []
+
         except Exception as e:
             print(f"Semantic Scholar search error: {str(e)}")
             return []
@@ -50,15 +52,12 @@ class SemanticScholarService(PaperSource):
         params = {
             "fields": "paperId,title,abstract,authors,year,citationCount,venue,openAccessPdf,externalIds"
         }
-        
+
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(url, params=params, headers=self.headers)
-                response.raise_for_status()
-                
-                paper = response.json()
-                return self.normalize_paper(paper)
-                
+            async with self.client:
+                response, data = await self.client.get(url, params=params, headers=self.headers)
+                return self.normalize_paper(data)
+
         except Exception as e:
             print(f"Semantic Scholar get paper error: {str(e)}")
             return None

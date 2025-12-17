@@ -1,20 +1,85 @@
+# SQLAlchemy Paper model
+from sqlalchemy import Column, Integer, String, Text, JSON, Boolean, DateTime, Float
+from sqlalchemy.dialects.postgresql import JSONB
+from pgvector.sqlalchemy import Vector
+from sqlalchemy.ext.declarative import declarative_base
+from app.core.database import Base
+from typing import Dict, Any
+import datetime
+
+class Paper(Base):
+    """Paper SQLAlchemy model"""
+    __tablename__ = "papers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    arxiv_id = Column(String, unique=True, index=True, nullable=True)
+    doi = Column(String, unique=True, index=True, nullable=True)
+    semantic_scholar_id = Column(String, unique=True, index=True, nullable=True)
+    openalex_id = Column(String, unique=True, index=True, nullable=True)
+
+    title = Column(String, nullable=False)
+    abstract = Column(Text, nullable=True)
+    authors = Column(JSON, nullable=True)  # Store as list
+
+    publication_date = Column(DateTime, nullable=True)
+    pdf_url = Column(String, nullable=True)
+
+    source = Column(String, nullable=True)  # arxiv, semantic_scholar, openalex
+    citation_count = Column(Integer, default=0)
+    venue = Column(String, nullable=True)
+
+    # Vector embedding for semantic search (768 dimensions for nomic-embed-text-v1.5)
+    embedding = Column(Vector(768), nullable=True)
+
+    # New optimization fields
+    category = Column(String, nullable=True)  # Category for domain-based search
+    paper_metadata = Column(JSONB, nullable=True)  # Additional metadata storage
+    date_added = Column(DateTime, default=datetime.datetime.utcnow)
+    last_updated = Column(DateTime, default=datetime.datetime.utcnow)
+    is_processed = Column(Boolean, default=False)  # For embedding processing
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary"""
+        return {
+            "id": self.id,
+            "arxiv_id": self.arxiv_id,
+            "doi": self.doi,
+            "semantic_scholar_id": self.semantic_scholar_id,
+            "openalex_id": self.openalex_id,
+            "title": self.title,
+            "abstract": self.abstract,
+            "authors": self.authors,
+            "publication_date": self.publication_date.isoformat() if self.publication_date else None,
+            "pdf_url": self.pdf_url,
+            "source": self.source,
+            "citation_count": self.citation_count,
+            "venue": self.venue,
+            "category": self.category,
+            "is_processed": self.is_processed,
+            "date_added": self.date_added.isoformat() if self.date_added else None,
+            "last_updated": self.last_updated.isoformat() if self.last_updated else None,
+            "is_manual": getattr(self, 'is_manual', False)  # Include is_manual if it exists
+        }
+
+
+# Deduplication functions (kept for compatibility)
 from typing import List, Dict, Any
 from difflib import SequenceMatcher
 
 def deduplicate_papers(papers: List[Dict[str, Any]], similarity_threshold: float = 0.85) -> List[Dict[str, Any]]:
     """
     Deduplicate papers from multiple sources
-    
+
     Strategy:
     1. Group by exact ID matches (DOI, arXiv ID)
     2. Group by similar titles (fuzzy matching)
     3. Merge metadata from multiple sources
     4. Prioritize: Semantic Scholar > arXiv > OpenAlex (for metadata quality)
-    
+
     Args:
         papers: List of paper dictionaries
         similarity_threshold: Title similarity threshold (0-1)
-        
+
     Returns:
         Deduplicated list of papers
     """

@@ -1,0 +1,649 @@
+python : WARNING:  database 
+"research_db" has a collation version 
+mismatch
+At line:1 char:1
++ python diagnose_lit_review_db.py 
+2>&1 | Out-File -FilePath test_resul 
+...
++ 
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpec 
+   ified: (WARNING:  datab...ersion   
+  mismatch:String) [], RemoteExcept   
+ ion
+    + FullyQualifiedErrorId : NativeC 
+   ommandError
+ 
+DETAIL:  The database was created 
+using collation version 2.41, but the 
+operating system provides version 
+2.36.
+HINT:  Rebuild all objects in this 
+database that use the default 
+collation and run ALTER DATABASE 
+research_db REFRESH COLLATION 
+VERSION, or build PostgreSQL with the 
+right library version.
+
+======================================================================
+LITERATURE REVIEW DATABASE DIAGNOSTIC
+======================================================================
+
+[INFO] Connecting to: postgresql://postgres:postgres@localhost:5432/research_db
+[SUCCESS] Database connected successfully
+
+======================================================================
+SETUP: Creating Test Data
+======================================================================
+
+[INFO] Creating test project...
+[SUCCESS] Test project created with ID: 14
+[INFO] Adding paper to project...
+[SUCCESS] Paper added to project
+
+======================================================================
+TESTING: Comparison Queries
+======================================================================
+
+[INFO] Testing: GET Comparison Config
+  Description: Fetch comparison configuration
+[ERROR] GET Comparison Config - Query failed
+[ERROR]   Error: (psycopg2.errors.UndefinedColumn) column "selected_paper_ids" does not exist
+LINE 2:             SELECT selected_paper_ids, insights_similarities...
+                           ^
+HINT:  Perhaps you meant to reference the column "comparison_configs.selected_papers".
+
+[SQL: 
+            SELECT selected_paper_ids, insights_similarities, insights_differences
+            FROM comparison_configs
+            WHERE user_id = %(user_id)s AND project_id = %(project_id)s
+            ]
+[parameters: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+[ERROR]   Query: 
+            SELECT selected_paper_ids, insights_similarities, insights_differences
+            FROM comparison_configs
+            WHERE user_id = :user_id AND project_id = :project_id
+            ...
+[ERROR]   Params: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}
+[INFO] Testing: INSERT Comparison Config
+  Description: Insert/update comparison config
+[ERROR] INSERT Comparison Config - Query failed
+[ERROR]   Error: (psycopg2.errors.InFailedSqlTransaction) current transaction is aborted, commands ignored until end of transaction block
+
+[SQL: 
+            INSERT INTO comparison_configs (
+                user_id, project_id, selected_paper_ids, 
+                insights_similarities, insights_differences
+            ) VALUES (
+                %(user_id)s, %(project_id)s, %(selected_paper_ids)s,
+                %(insights_similarities)s, %(insights_differences)s
+            )
+            ON CONFLICT (user_id, project_id) DO UPDATE
+            SET selected_paper_ids = EXCLUDED.selected_paper_ids
+            ]
+[parameters: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14, 'selected_paper_ids': [1], 'insights_similarities': 'Test similarities', 'insights_differences': 'Test differences'}]
+(Background on this error at: https://sqlalche.me/e/20/2j85)
+[ERROR]   Query: 
+            INSERT INTO comparison_configs (
+                user_id, project_id, selected_paper_ids, 
+                insights_similarities, insights_differences
+            ) VALUES (
+             ...
+[ERROR]   Params: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14, 'selected_paper_ids': [1], 'insights_similarities': 'Test similarities', 'insights_differences': 'Test differences'}
+[INFO] Testing: GET Comparison Attributes
+  Description: Fetch comparison attributes
+[ERROR] GET Comparison Attributes - Query failed
+[ERROR]   Error: (psycopg2.errors.UndefinedColumn) column "paper_id" does not exist
+LINE 2:             SELECT paper_id, attribute_name, attribute_value
+                           ^
+HINT:  Perhaps you meant to reference the column "comparison_attributes.user_id".
+
+[SQL: 
+            SELECT paper_id, attribute_name, attribute_value
+            FROM comparison_attributes
+            WHERE user_id = %(user_id)s AND project_id = %(project_id)s
+            ORDER BY attribute_name, paper_id
+            ]
+[parameters: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+[ERROR]   Query: 
+            SELECT paper_id, attribute_name, attribute_value
+            FROM comparison_attributes
+            WHERE user_id = :user_id AND project_id = :project_id
+            ORDER BY attribute_na...
+[ERROR]   Params: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}
+
+======================================================================
+TESTING: Findings & Gaps Queries
+======================================================================
+
+[INFO] Testing: GET Research Gaps
+  Description: Fetch research gaps with aggregated paper associations
+[ERROR] GET Research Gaps - Query failed
+[ERROR]   Error: (psycopg2.errors.InFailedSqlTransaction) current transaction is aborted, commands ignored until end of transaction block
+
+[SQL: 
+            SELECT 
+                rg.id,
+                rg.description,
+                rg.priority,
+                rg.notes,
+                COALESCE(
+                    json_agg(gpa.paper_id) FILTER (WHERE gpa.paper_id IS NOT NULL),
+                    '[]'::json
+                ) as related_paper_ids
+            FROM research_gaps rg
+            LEFT JOIN gap_paper_associations gpa ON gpa.gap_id = rg.id
+            WHERE rg.user_id = %(user_id)s AND rg.project_id = %(project_id)s
+            GROUP BY rg.id, rg.description, rg.priority, rg.notes
+            ORDER BY 
+                CASE rg.priority 
+                    WHEN 'High' THEN 1 
+                    WHEN 'Medium' THEN 2 
+                    WHEN 'Low' THEN 3 
+                END,
+                rg.created_at DESC
+            ]
+[parameters: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}]
+(Background on this error at: https://sqlalche.me/e/20/2j85)
+[ERROR]   Query: 
+            SELECT 
+                rg.id,
+                rg.description,
+                rg.priority,
+                rg.notes,
+                COALESCE(
+                    json_agg(gpa.paper_id) ...
+[ERROR]   Params: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}
+[INFO] Testing: GET Findings
+  Description: Fetch findings for all papers in project
+[ERROR] GET Findings - Query failed
+[ERROR]   Error: (psycopg2.errors.InFailedSqlTransaction) current transaction is aborted, commands ignored until end of transaction block
+
+[SQL: 
+            SELECT 
+                p.id as paper_id,
+                p.title,
+                f.key_finding,
+                f.limitations
+            FROM papers p
+            LEFT JOIN findings f ON (
+                f.paper_id = p.id::text 
+                AND f.user_id = %(user_id)s 
+                AND f.project_id = %(project_id)s
+            )
+            WHERE p.id IN (
+                SELECT paper_id::uuid 
+                FROM project_papers 
+                WHERE project_id = %(project_id)s
+            )
+            ORDER BY p.year DESC, p.title
+            ]
+[parameters: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}]
+(Background on this error at: https://sqlalche.me/e/20/2j85)
+[ERROR]   Query: 
+            SELECT 
+                p.id as paper_id,
+                p.title,
+                f.key_finding,
+                f.limitations
+            FROM papers p
+            LEFT JOIN findings f ...
+[ERROR]   Params: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}
+
+======================================================================
+TESTING: Methodology Queries
+======================================================================
+
+[INFO] Testing: GET Methodology Data
+  Description: Fetch methodology data for all papers in project
+[ERROR] GET Methodology Data - Query failed
+[ERROR]   Error: (psycopg2.errors.InFailedSqlTransaction) current transaction is aborted, commands ignored until end of transaction block
+
+[SQL: 
+            SELECT 
+                p.id as paper_id,
+                p.title,
+                p.methodology,
+                p.methodology_type,
+                md.methodology_description,
+                md.methodology_context,
+                md.approach_novelty,
+                md.custom_attributes
+            FROM papers p
+            LEFT JOIN methodology_data md ON (
+                md.paper_id = p.id::text 
+                AND md.user_id = %(user_id)s 
+                AND md.project_id = %(project_id)s
+            )
+            WHERE p.id IN (
+                SELECT paper_id::uuid 
+                FROM project_papers 
+                WHERE project_id = %(project_id)s
+            )
+            ORDER BY p.year DESC, p.title
+            ]
+[parameters: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}]
+(Background on this error at: https://sqlalche.me/e/20/2j85)
+[ERROR]   Query: 
+            SELECT 
+                p.id as paper_id,
+                p.title,
+                p.methodology,
+                p.methodology_type,
+                md.methodology_description,
+         ...
+[ERROR]   Params: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}
+
+======================================================================
+TESTING: Synthesis Queries
+======================================================================
+
+[INFO] Testing: GET Synthesis Structure
+  Description: Fetch synthesis table structure
+[ERROR] GET Synthesis Structure - Query failed
+[ERROR]   Error: (psycopg2.errors.InFailedSqlTransaction) current transaction is aborted, commands ignored until end of transaction block
+
+[SQL: 
+            SELECT columns, rows
+            FROM synthesis_configs
+            WHERE user_id = %(user_id)s AND project_id = %(project_id)s
+            ]
+[parameters: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}]
+(Background on this error at: https://sqlalche.me/e/20/2j85)
+[ERROR]   Query: 
+            SELECT columns, rows
+            FROM synthesis_configs
+            WHERE user_id = :user_id AND project_id = :project_id
+            ...
+[ERROR]   Params: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}
+[INFO] Testing: GET Synthesis Cells
+  Description: Fetch synthesis cell values
+[ERROR] GET Synthesis Cells - Query failed
+[ERROR]   Error: (psycopg2.errors.InFailedSqlTransaction) current transaction is aborted, commands ignored until end of transaction block
+
+[SQL: 
+            SELECT row_id, column_id, value
+            FROM synthesis_cells
+            WHERE user_id = %(user_id)s AND project_id = %(project_id)s
+            ]
+[parameters: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}]
+(Background on this error at: https://sqlalche.me/e/20/2j85)
+[ERROR]   Query: 
+            SELECT row_id, column_id, value
+            FROM synthesis_cells
+            WHERE user_id = :user_id AND project_id = :project_id
+            ...
+[ERROR]   Params: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}
+
+======================================================================
+TESTING: Analysis Queries
+======================================================================
+
+[INFO] Testing: GET Analysis Config
+  Description: Fetch analysis configuration
+[ERROR] GET Analysis Config - Query failed
+[ERROR]   Error: (psycopg2.errors.InFailedSqlTransaction) current transaction is aborted, commands ignored until end of transaction block
+
+[SQL: 
+            SELECT chart_preferences, custom_metrics
+            FROM analysis_configs
+            WHERE user_id = %(user_id)s AND project_id = %(project_id)s
+            ]
+[parameters: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}]
+(Background on this error at: https://sqlalche.me/e/20/2j85)
+[ERROR]   Query: 
+            SELECT chart_preferences, custom_metrics
+            FROM analysis_configs
+            WHERE user_id = :user_id AND project_id = :project_id
+            ...
+[ERROR]   Params: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}
+
+======================================================================
+TESTING: Table Config Queries
+======================================================================
+
+[INFO] Testing: GET Table Config
+  Description: Fetch table configuration
+[ERROR] GET Table Config - Query failed
+[ERROR]   Error: (psycopg2.errors.InFailedSqlTransaction) current transaction is aborted, commands ignored until end of transaction block
+
+[SQL: 
+            SELECT visible_columns, column_order, custom_fields
+            FROM table_configs
+            WHERE user_id = %(user_id)s AND project_id = %(project_id)s AND tab_name = %(tab_name)s
+            ]
+[parameters: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14, 'tab_name': 'library'}]
+(Background on this error at: https://sqlalche.me/e/20/2j85)
+[ERROR]   Query: 
+            SELECT visible_columns, column_order, custom_fields
+            FROM table_configs
+            WHERE user_id = :user_id AND project_id = :project_id AND tab_name = :tab_name
+            ...
+[ERROR]   Params: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14, 'tab_name': 'library'}
+[INFO] Testing: GET Project Papers
+  Description: Fetch all papers in project with methodology data
+[ERROR] GET Project Papers - Query failed
+[ERROR]   Error: (psycopg2.errors.InFailedSqlTransaction) current transaction is aborted, commands ignored until end of transaction block
+
+[SQL: 
+            SELECT 
+                p.id,
+                p.title,
+                md.methodology_description as "methodologyDescription",
+                md.approach_novelty as "approachNovelty"
+            FROM papers p
+            INNER JOIN project_papers pp ON p.id = pp.paper_id
+            LEFT JOIN methodology_data md ON (
+                md.paper_id = p.id::text 
+                AND md.user_id = %(user_id)s 
+                AND md.project_id = %(project_id)s
+            )
+            WHERE pp.project_id = %(project_id)s
+            ]
+[parameters: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}]
+(Background on this error at: https://sqlalche.me/e/20/2j85)
+[ERROR]   Query: 
+            SELECT 
+                p.id,
+                p.title,
+                md.methodology_description as "methodologyDescription",
+                md.approach_novelty as "approachNovelty"
+   ...
+[ERROR]   Params: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}
+
+======================================================================
+CLEANUP: Removing Test Data
+======================================================================
+
+[WARNING] Cleanup warning: (psycopg2.errors.InFailedSqlTransaction) current transaction is aborted, commands ignored until end of transaction block
+
+[SQL: DELETE FROM user_literature_reviews WHERE id = %(pid)s]
+[parameters: {'pid': 14}]
+(Background on this error at: https://sqlalche.me/e/20/2j85)
+
+======================================================================
+TEST SUMMARY
+======================================================================
+
+Total Queries Tested: 11
+[SUCCESS] Passed: 0
+[ERROR] Failed: 11
+
+======================================================================
+ERRORS DETAIL
+======================================================================
+
+
+[ERROR 1]: GET Comparison Config
+  Error: (psycopg2.errors.UndefinedColumn) column "selected_paper_ids" does not exist
+LINE 2:             SELECT selected_paper_ids, insights_similarities...
+                           ^
+HINT:  Perhaps you meant to reference the column "comparison_configs.selected_papers".
+
+[SQL: 
+            SELECT selected_paper_ids, insights_similarities, insights_differences
+            FROM comparison_configs
+            WHERE user_id = %(user_id)s AND project_id = %(project_id)s
+            ]
+[parameters: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+  Query: 
+            SELECT selected_paper_ids, insights_similarities, insights_differences
+            FROM comparison_configs
+            WHERE user_id = :user_id AND project_id = :project_id
+            ...
+  Params: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}
+
+[ERROR 2]: INSERT Comparison Config
+  Error: (psycopg2.errors.InFailedSqlTransaction) current transaction is aborted, commands ignored until end of transaction block
+
+[SQL: 
+            INSERT INTO comparison_configs (
+                user_id, project_id, selected_paper_ids, 
+                insights_similarities, insights_differences
+            ) VALUES (
+                %(user_id)s, %(project_id)s, %(selected_paper_ids)s,
+                %(insights_similarities)s, %(insights_differences)s
+            )
+            ON CONFLICT (user_id, project_id) DO UPDATE
+            SET selected_paper_ids = EXCLUDED.selected_paper_ids
+            ]
+[parameters: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14, 'selected_paper_ids': [1], 'insights_similarities': 'Test similarities', 'insights_differences': 'Test differences'}]
+(Background on this error at: https://sqlalche.me/e/20/2j85)
+  Query: 
+            INSERT INTO comparison_configs (
+                user_id, project_id, selected_paper_ids, 
+                insights_similarities, insights_differences
+            ) VALUES (
+             ...
+  Params: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14, 'selected_paper_ids': [1], 'insights_similarities': 'Test similarities', 'insights_differences': 'Test differences'}
+
+[ERROR 3]: GET Comparison Attributes
+  Error: (psycopg2.errors.UndefinedColumn) column "paper_id" does not exist
+LINE 2:             SELECT paper_id, attribute_name, attribute_value
+                           ^
+HINT:  Perhaps you meant to reference the column "comparison_attributes.user_id".
+
+[SQL: 
+            SELECT paper_id, attribute_name, attribute_value
+            FROM comparison_attributes
+            WHERE user_id = %(user_id)s AND project_id = %(project_id)s
+            ORDER BY attribute_name, paper_id
+            ]
+[parameters: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+  Query: 
+            SELECT paper_id, attribute_name, attribute_value
+            FROM comparison_attributes
+            WHERE user_id = :user_id AND project_id = :project_id
+            ORDER BY attribute_na...
+  Params: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}
+
+[ERROR 4]: GET Research Gaps
+  Error: (psycopg2.errors.InFailedSqlTransaction) current transaction is aborted, commands ignored until end of transaction block
+
+[SQL: 
+            SELECT 
+                rg.id,
+                rg.description,
+                rg.priority,
+                rg.notes,
+                COALESCE(
+                    json_agg(gpa.paper_id) FILTER (WHERE gpa.paper_id IS NOT NULL),
+                    '[]'::json
+                ) as related_paper_ids
+            FROM research_gaps rg
+            LEFT JOIN gap_paper_associations gpa ON gpa.gap_id = rg.id
+            WHERE rg.user_id = %(user_id)s AND rg.project_id = %(project_id)s
+            GROUP BY rg.id, rg.description, rg.priority, rg.notes
+            ORDER BY 
+                CASE rg.priority 
+                    WHEN 'High' THEN 1 
+                    WHEN 'Medium' THEN 2 
+                    WHEN 'Low' THEN 3 
+                END,
+                rg.created_at DESC
+            ]
+[parameters: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}]
+(Background on this error at: https://sqlalche.me/e/20/2j85)
+  Query: 
+            SELECT 
+                rg.id,
+                rg.description,
+                rg.priority,
+                rg.notes,
+                COALESCE(
+                    json_agg(gpa.paper_id) ...
+  Params: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}
+
+[ERROR 5]: GET Findings
+  Error: (psycopg2.errors.InFailedSqlTransaction) current transaction is aborted, commands ignored until end of transaction block
+
+[SQL: 
+            SELECT 
+                p.id as paper_id,
+                p.title,
+                f.key_finding,
+                f.limitations
+            FROM papers p
+            LEFT JOIN findings f ON (
+                f.paper_id = p.id::text 
+                AND f.user_id = %(user_id)s 
+                AND f.project_id = %(project_id)s
+            )
+            WHERE p.id IN (
+                SELECT paper_id::uuid 
+                FROM project_papers 
+                WHERE project_id = %(project_id)s
+            )
+            ORDER BY p.year DESC, p.title
+            ]
+[parameters: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}]
+(Background on this error at: https://sqlalche.me/e/20/2j85)
+  Query: 
+            SELECT 
+                p.id as paper_id,
+                p.title,
+                f.key_finding,
+                f.limitations
+            FROM papers p
+            LEFT JOIN findings f ...
+  Params: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}
+
+[ERROR 6]: GET Methodology Data
+  Error: (psycopg2.errors.InFailedSqlTransaction) current transaction is aborted, commands ignored until end of transaction block
+
+[SQL: 
+            SELECT 
+                p.id as paper_id,
+                p.title,
+                p.methodology,
+                p.methodology_type,
+                md.methodology_description,
+                md.methodology_context,
+                md.approach_novelty,
+                md.custom_attributes
+            FROM papers p
+            LEFT JOIN methodology_data md ON (
+                md.paper_id = p.id::text 
+                AND md.user_id = %(user_id)s 
+                AND md.project_id = %(project_id)s
+            )
+            WHERE p.id IN (
+                SELECT paper_id::uuid 
+                FROM project_papers 
+                WHERE project_id = %(project_id)s
+            )
+            ORDER BY p.year DESC, p.title
+            ]
+[parameters: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}]
+(Background on this error at: https://sqlalche.me/e/20/2j85)
+  Query: 
+            SELECT 
+                p.id as paper_id,
+                p.title,
+                p.methodology,
+                p.methodology_type,
+                md.methodology_description,
+         ...
+  Params: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}
+
+[ERROR 7]: GET Synthesis Structure
+  Error: (psycopg2.errors.InFailedSqlTransaction) current transaction is aborted, commands ignored until end of transaction block
+
+[SQL: 
+            SELECT columns, rows
+            FROM synthesis_configs
+            WHERE user_id = %(user_id)s AND project_id = %(project_id)s
+            ]
+[parameters: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}]
+(Background on this error at: https://sqlalche.me/e/20/2j85)
+  Query: 
+            SELECT columns, rows
+            FROM synthesis_configs
+            WHERE user_id = :user_id AND project_id = :project_id
+            ...
+  Params: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}
+
+[ERROR 8]: GET Synthesis Cells
+  Error: (psycopg2.errors.InFailedSqlTransaction) current transaction is aborted, commands ignored until end of transaction block
+
+[SQL: 
+            SELECT row_id, column_id, value
+            FROM synthesis_cells
+            WHERE user_id = %(user_id)s AND project_id = %(project_id)s
+            ]
+[parameters: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}]
+(Background on this error at: https://sqlalche.me/e/20/2j85)
+  Query: 
+            SELECT row_id, column_id, value
+            FROM synthesis_cells
+            WHERE user_id = :user_id AND project_id = :project_id
+            ...
+  Params: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}
+
+[ERROR 9]: GET Analysis Config
+  Error: (psycopg2.errors.InFailedSqlTransaction) current transaction is aborted, commands ignored until end of transaction block
+
+[SQL: 
+            SELECT chart_preferences, custom_metrics
+            FROM analysis_configs
+            WHERE user_id = %(user_id)s AND project_id = %(project_id)s
+            ]
+[parameters: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}]
+(Background on this error at: https://sqlalche.me/e/20/2j85)
+  Query: 
+            SELECT chart_preferences, custom_metrics
+            FROM analysis_configs
+            WHERE user_id = :user_id AND project_id = :project_id
+            ...
+  Params: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}
+
+[ERROR 10]: GET Table Config
+  Error: (psycopg2.errors.InFailedSqlTransaction) current transaction is aborted, commands ignored until end of transaction block
+
+[SQL: 
+            SELECT visible_columns, column_order, custom_fields
+            FROM table_configs
+            WHERE user_id = %(user_id)s AND project_id = %(project_id)s AND tab_name = %(tab_name)s
+            ]
+[parameters: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14, 'tab_name': 'library'}]
+(Background on this error at: https://sqlalche.me/e/20/2j85)
+  Query: 
+            SELECT visible_columns, column_order, custom_fields
+            FROM table_configs
+            WHERE user_id = :user_id AND project_id = :project_id AND tab_name = :tab_name
+            ...
+  Params: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14, 'tab_name': 'library'}
+
+[ERROR 11]: GET Project Papers
+  Error: (psycopg2.errors.InFailedSqlTransaction) current transaction is aborted, commands ignored until end of transaction block
+
+[SQL: 
+            SELECT 
+                p.id,
+                p.title,
+                md.methodology_description as "methodologyDescription",
+                md.approach_novelty as "approachNovelty"
+            FROM papers p
+            INNER JOIN project_papers pp ON p.id = pp.paper_id
+            LEFT JOIN methodology_data md ON (
+                md.paper_id = p.id::text 
+                AND md.user_id = %(user_id)s 
+                AND md.project_id = %(project_id)s
+            )
+            WHERE pp.project_id = %(project_id)s
+            ]
+[parameters: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}]
+(Background on this error at: https://sqlalche.me/e/20/2j85)
+  Query: 
+            SELECT 
+                p.id,
+                p.title,
+                md.methodology_description as "methodologyDescription",
+                md.approach_novelty as "approachNovelty"
+   ...
+  Params: {'user_id': '550e8400-e29b-41d4-a716-446655440000', 'project_id': 14}
+[INFO] Database connection closed

@@ -1,0 +1,143 @@
+:root {
+  /* Colors - Exact hex codes from ResearchHub Design Specifications */
+
+  /* Primary Colors */
+  --color-primary-blue: #2563EB;
+  --color-primary-indigo: #6366F1;
+  --color-primary-dark: #111827;
+
+  /* Gray Scale */
+  --color-gray-50: #F9FAFB;
+  --color-gray-100: #F3F4F6;
+  --color-gray-200: #E5E7EB;
+  --color-gray-400: #9CA3AF;
+  --color-gray-500: #6B7280;
+  --color-gray-600: #4B5563;
+  --color-gray-700: #374151;
+  --color-gray-900: #111827;
+
+  /* Pastel Background Colors */
+  --color-bg-blue: #EFF6FF;
+  --color-bg-purple: #F5F3FF;
+  --color-bg-green: #ECFDF5;
+
+  /* Card, Badge, and Accent Colors */
+  --color-card-bg: #FFFFFF;
+  --color-border: #E5E7EB;
+  --color-border-light: #F3F4F6;
+  --color-focus-ring: #2563EB;
+
+  /* Interactive States */
+  --color-hover-overlay: #F9FAFB;
+  --color-pressed-overlay: #F3F4F6;
+  --color-active-blue: #1D4ED8;
+  --color-shadow: rgba(0, 0, 0, 0.1);
+
+  /* Typography - Exact sizes and weights from specifications */
+
+  /* Display (Hero) Typography */
+  --text-display-2xl: 72px;
+  --text-display-xl: 56px;
+
+  /* Body Typography */
+  --text-lg: 18px;
+  --text-base: 16px;
+  --text-sm: 14px;
+  --text-xs: 12px;
+
+  /* Font Weights */
+  --font-light: 300;
+  --font-normal: 400;
+  --font-medium: 500;
+  --font-semibold: 600;
+  --font-bold: 700;
+
+  /* Line Heights */
+  --leading-tight: 1.1;
+  --leading-snug: 1.375;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.6;
+  --leading-loose: 2.0;
+
+  /* Spacing Scale - Complete 4px system */
+
+  --space-px: 1px;
+  --space-0: 0px;
+  --space-0-5: 2px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+  --space-32: 128px;
+
+  /* Icon Sizes */
+  --icon-sm: 16px;
+  --icon-md: 20px;
+  --icon-lg: 24px;
+  --icon-xl: 32px;
+  --icon-2xl: 40px;
+
+  /* Border Radius */
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
+  --radius-full: 9999px;
+  --radius-card: 24px;
+
+  /* Shadows - Exact from specifications */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  --shadow-inner: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06);
+  --shadow-none: none;
+
+  /* Card Elevation */
+  --elevated-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --elevated-shadow-hover: 0 8px 24px rgba(0, 0, 0, 0.12);
+
+  /* Transitions - Exact speeds from specifications */
+  --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* z-index Scale */
+  --z-dropdown: 1000;
+  --z-sticky: 1020;
+  --z-modal: 1050;
+  --z-popover: 1070;
+  --z-tooltip: 1080;
+
+  /* Focus Ring */
+  --focus-ring-width: 2px;
+  --focus-ring-color: #2563EB;
+  --focus-ring-offset: 2px;
+
+  /* Hover Scale Effects */
+  --hover-scale-sm: 1.02;
+  --hover-scale-md: 1.05;
+  --hover-lift: translateY(-2px);
+}
+
+.dark {
+  /* Dark mode adjustments */
+  --color-primary-blue: #3B82F6;
+  --color-primary-indigo: #8B5CF6;
+  --color-gray-900: #111827;
+  --color-gray-800: #1F2937;
+  --color-gray-700: #374151;
+  --color-gray-600: #4B5563;
+  --color-gray-500: #6B7280;
+}

@@ -1,0 +1,517 @@
+{
+  "papers": [
+    {
+      "name": "id",
+      "type": "integer",
+      "udt": "int4"
+    },
+    {
+      "name": "arxiv_id",
+      "type": "character varying",
+      "udt": "varchar"
+    },
+    {
+      "name": "doi",
+      "type": "character varying",
+      "udt": "varchar"
+    },
+    {
+      "name": "semantic_scholar_id",
+      "type": "character varying",
+      "udt": "varchar"
+    },
+    {
+      "name": "openalex_id",
+      "type": "character varying",
+      "udt": "varchar"
+    },
+    {
+      "name": "title",
+      "type": "character varying",
+      "udt": "varchar"
+    },
+    {
+      "name": "abstract",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "authors",
+      "type": "json",
+      "udt": "json"
+    },
+    {
+      "name": "publication_date",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "pdf_url",
+      "type": "character varying",
+      "udt": "varchar"
+    },
+    {
+      "name": "source",
+      "type": "character varying",
+      "udt": "varchar"
+    },
+    {
+      "name": "citation_count",
+      "type": "integer",
+      "udt": "int4"
+    },
+    {
+      "name": "venue",
+      "type": "character varying",
+      "udt": "varchar"
+    },
+    {
+      "name": "embedding",
+      "type": "USER-DEFINED",
+      "udt": "vector"
+    },
+    {
+      "name": "is_processed",
+      "type": "boolean",
+      "udt": "bool"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "category",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "metadata",
+      "type": "jsonb",
+      "udt": "jsonb"
+    },
+    {
+      "name": "date_added",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "last_updated",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "paper_metadata",
+      "type": "jsonb",
+      "udt": "jsonb"
+    },
+    {
+      "name": "is_manual",
+      "type": "boolean",
+      "udt": "bool"
+    },
+    {
+      "name": "user_id",
+      "type": "uuid",
+      "udt": "uuid"
+    }
+  ],
+  "project_papers": [
+    {
+      "name": "id",
+      "type": "integer",
+      "udt": "int4"
+    },
+    {
+      "name": "project_id",
+      "type": "integer",
+      "udt": "int4"
+    },
+    {
+      "name": "paper_id",
+      "type": "integer",
+      "udt": "int4"
+    },
+    {
+      "name": "added_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "added_by",
+      "type": "uuid",
+      "udt": "uuid"
+    }
+  ],
+  "findings": [
+    {
+      "name": "id",
+      "type": "uuid",
+      "udt": "uuid"
+    },
+    {
+      "name": "user_id",
+      "type": "uuid",
+      "udt": "uuid"
+    },
+    {
+      "name": "project_id",
+      "type": "integer",
+      "udt": "int4"
+    },
+    {
+      "name": "paper_id",
+      "type": "integer",
+      "udt": "int4"
+    },
+    {
+      "name": "key_finding",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "page_number",
+      "type": "character varying",
+      "udt": "varchar"
+    },
+    {
+      "name": "quote",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "limitations",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "custom_notes",
+      "type": "text",
+      "udt": "text"
+    }
+  ],
+  "methodology_data": [
+    {
+      "name": "id",
+      "type": "uuid",
+      "udt": "uuid"
+    },
+    {
+      "name": "user_id",
+      "type": "uuid",
+      "udt": "uuid"
+    },
+    {
+      "name": "project_id",
+      "type": "integer",
+      "udt": "int4"
+    },
+    {
+      "name": "paper_id",
+      "type": "integer",
+      "udt": "int4"
+    },
+    {
+      "name": "theoretical_framework",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "study_design",
+      "type": "character varying",
+      "udt": "varchar"
+    },
+    {
+      "name": "data_collection",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "sampling_strategy",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "analysis_methods",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "methodology_description",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "methodology_context",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "approach_novelty",
+      "type": "text",
+      "udt": "text"
+    }
+  ],
+  "research_gaps": [
+    {
+      "name": "id",
+      "type": "uuid",
+      "udt": "uuid"
+    },
+    {
+      "name": "user_id",
+      "type": "uuid",
+      "udt": "uuid"
+    },
+    {
+      "name": "project_id",
+      "type": "integer",
+      "udt": "int4"
+    },
+    {
+      "name": "description",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "priority",
+      "type": "character varying",
+      "udt": "varchar"
+    },
+    {
+      "name": "status",
+      "type": "character varying",
+      "udt": "varchar"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    }
+  ],
+  "comparison_configs": [
+    {
+      "name": "id",
+      "type": "uuid",
+      "udt": "uuid"
+    },
+    {
+      "name": "user_id",
+      "type": "uuid",
+      "udt": "uuid"
+    },
+    {
+      "name": "project_id",
+      "type": "integer",
+      "udt": "int4"
+    },
+    {
+      "name": "selected_paper_ids",
+      "type": "ARRAY",
+      "udt": "_text"
+    },
+    {
+      "name": "insights_similarities",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "insights_differences",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    }
+  ],
+  "comparison_attributes": [
+    {
+      "name": "id",
+      "type": "uuid",
+      "udt": "uuid"
+    },
+    {
+      "name": "user_id",
+      "type": "uuid",
+      "udt": "uuid"
+    },
+    {
+      "name": "project_id",
+      "type": "integer",
+      "udt": "int4"
+    },
+    {
+      "name": "paper_id",
+      "type": "integer",
+      "udt": "int4"
+    },
+    {
+      "name": "attribute_name",
+      "type": "character varying",
+      "udt": "varchar"
+    },
+    {
+      "name": "attribute_value",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    }
+  ],
+  "synthesis_configs": [
+    {
+      "name": "id",
+      "type": "integer",
+      "udt": "int4"
+    },
+    {
+      "name": "user_id",
+      "type": "uuid",
+      "udt": "uuid"
+    },
+    {
+      "name": "project_id",
+      "type": "integer",
+      "udt": "int4"
+    },
+    {
+      "name": "columns",
+      "type": "jsonb",
+      "udt": "jsonb"
+    },
+    {
+      "name": "rows",
+      "type": "jsonb",
+      "udt": "jsonb"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    }
+  ],
+  "synthesis_cells": [
+    {
+      "name": "id",
+      "type": "integer",
+      "udt": "int4"
+    },
+    {
+      "name": "user_id",
+      "type": "uuid",
+      "udt": "uuid"
+    },
+    {
+      "name": "project_id",
+      "type": "integer",
+      "udt": "int4"
+    },
+    {
+      "name": "row_id",
+      "type": "character varying",
+      "udt": "varchar"
+    },
+    {
+      "name": "column_id",
+      "type": "character varying",
+      "udt": "varchar"
+    },
+    {
+      "name": "value",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    }
+  ],
+  "analysis_configs": [
+    {
+      "name": "id",
+      "type": "integer",
+      "udt": "int4"
+    },
+    {
+      "name": "user_id",
+      "type": "uuid",
+      "udt": "uuid"
+    },
+    {
+      "name": "project_id",
+      "type": "integer",
+      "udt": "int4"
+    },
+    {
+      "name": "chart_preferences",
+      "type": "jsonb",
+      "udt": "jsonb"
+    },
+    {
+      "name": "custom_metrics",
+      "type": "jsonb",
+      "udt": "jsonb"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    }
+  ]
+}

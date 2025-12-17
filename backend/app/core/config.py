@@ -18,13 +18,19 @@ class Settings(BaseSettings):
     # External APIs
     SEMANTIC_SCHOLAR_API_KEY: Optional[str] = None
     OPENALEX_EMAIL: Optional[str] = None  # For polite pool access
+    GROQ_API_KEY: Optional[str] = None  # For AI query analysis
+    CORE_API_KEY: Optional[str] = None  # For CORE repository access
+    NCBI_API_KEY: Optional[str] = None  # For PubMed API access
     
     # CORS
     CORS_ORIGINS: list = [
         "http://localhost:3000",
         "http://localhost:5173",
+        "http://localhost:5174",
         "http://127.0.0.1:3000",
-        "http://127.0.0.1:5173"
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174"
     ]
     
     # Cache Settings
@@ -33,6 +39,10 @@ class Settings(BaseSettings):
     # Search Settings
     DEFAULT_SEARCH_LIMIT: int = 50
     MAX_SEARCH_LIMIT: int = 100
+
+    # Debug Settings
+    DEBUG_MODE: bool = False
+    DEBUG_LOG_LEVEL: str = "INFO"
     
     class Config:
         env_file = ".env"

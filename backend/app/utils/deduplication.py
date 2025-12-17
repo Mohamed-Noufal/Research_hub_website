@@ -116,8 +116,10 @@ def _merge_papers(paper1: Dict[str, Any], paper2: Dict[str, Any], source_priorit
             merged[id_field] = secondary[id_field]
     
     # Use longest abstract
-    if len(secondary.get("abstract", "")) > len(merged.get("abstract", "")):
-        merged["abstract"] = secondary["abstract"]
+    secondary_abstract = secondary.get("abstract") or ""
+    merged_abstract = merged.get("abstract") or ""
+    if len(secondary_abstract) > len(merged_abstract):
+        merged["abstract"] = secondary_abstract
     
     # Use PDF URL if primary doesn't have one
     if not merged.get("pdf_url") and secondary.get("pdf_url"):

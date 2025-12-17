@@ -1,0 +1,119 @@
+
+# Manual Paper Creation Endpoint - Add to papers.py
+
+from fastapi import UploadFile, File, Form
+from pathlib import Path
+
+@router.post("/papers/manual")
+async def create_manual_paper(
+    title: str = Form(...),
+    authors: str = Form(...),  # Comma-separated
+    abstract: Optional[str] = Form(None),
+    year: Optional[int] = Form(None),
+    doi: Optional[str] = Form(None),
+    venue: Optional[str] = Form(None),
+    folder_id: Optional[int] = Form(None),
+    pdf_file: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id)
+):
+    """Create a paper manually with optional PDF upload"""
+    
+    # Parse authors
+    authors_list = [a.strip() for a in authors.split(',') if a.strip()]
+    
+    if not authors_list:
+        raise HTTPException(status_code=400, detail="At least one author is required")
+    
+    # Handle PDF upload if provided
+    pdf_url = None
+    if pdf_file:
+        # Validate PDF
+        if not pdf_file.filename.endswith('.pdf'):
+            raise HTTPException(status_code=400, detail="File must be a PDF")
+        
+        # Create uploads directory
+        upload_dir = Path("uploads/pdfs")
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Generate unique filename
+        timestamp = int(time.time())
+        filename = f"manual_{timestamp}_{pdf_file.filename}"
+        file_path = upload_dir / filename
+        
+        # Save file
+        try:
+            with file_path.open("wb") as f:
+                content = await pdf_file.read()
+                f.write(content)
+            
+            pdf_url = f"http://localhost:8000/uploads/pdfs/{filename}"
+            logger.info(f"Saved manual PDF: {file_path}")
+        except Exception as e:
+            logger.error(f"Failed to save PDF: {e}")
+            raise HTTPException(status_code=500, detail="Failed to save PDF file")
+    
+    # Create paper in database
+    try:
+        result = db.execute(
+            """
+            INSERT INTO papers (
+                user_id, title, abstract, authors, publication_date,
+                doi, venue, pdf_url, source, is_manual, citation_count
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id, title, abstract, authors, publication_date, doi, venue, pdf_url, source, citation_count
+            """,
+            (
+                user_id,
+                title,
+                abstract,
+                authors_list,
+                f"{year}-01-01" if year else None,
+                doi,
+                venue,
+                pdf_url,
+                "Manual Entry",
+                True,  # is_manual
+                0  # citation_count
+            )
+        )
+        db.commit()
+        
+        paper_data = result.fetchone()
+        paper_id = paper_data[0]
+        
+        # Add to folder if specified
+        if folder_id:
+            # Verify folder exists and belongs to user
+            folder_check = db.execute(
+                "SELECT id FROM folders WHERE id = %s AND user_id = %s",
+                (folder_id, user_id)
+            ).fetchone()
+            
+            if folder_check:
+                db.execute(
+                    "INSERT INTO folder_papers (folder_id, paper_id) VALUES (%s, %s)",
+                    (folder_id, paper_id)
+                )
+                db.commit()
+                logger.info(f"Added paper {paper_id} to folder {folder_id}")
+        
+        return {
+            "id": paper_id,
+            "title": paper_data[1],
+            "abstract": paper_data[2],
+            "authors": paper_data[3],
+            "publication_date": paper_data[4],
+            "doi": paper_data[5],
+            "venue": paper_data[6],
+            "pdf_url": paper_data[7],
+            "source": paper_data[8],
+            "citation_count": paper_data[9],
+            "is_manual": True
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to create manual paper: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create paper: {str(e)}")

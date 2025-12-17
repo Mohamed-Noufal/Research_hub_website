@@ -1,0 +1,41 @@
+{
+  "passed": 18,
+  "failed": 5,
+  "errors": [
+    {
+      "endpoint": "/projects/24/comparison/config",
+      "method": "GET",
+      "expected": 200,
+      "actual": 500,
+      "response": "Internal Server Error"
+    },
+    {
+      "endpoint": "/projects/24/gaps",
+      "method": "POST",
+      "expected": 200,
+      "actual": 500,
+      "response": "Internal Server Error"
+    },
+    {
+      "endpoint": "/projects/24/analysis/config",
+      "method": "PUT",
+      "expected": 200,
+      "actual": 500,
+      "response": "Internal Server Error"
+    },
+    {
+      "endpoint": "/projects/24/tables/library/config",
+      "method": "GET",
+      "expected": 200,
+      "actual": 500,
+      "response": "Internal Server Error"
+    },
+    {
+      "endpoint": "/projects/24/tables/library/config",
+      "method": "PUT",
+      "expected": 200,
+      "actual": 400,
+      "response": "{\"detail\":\"No fields to update\"}"
+    }
+  ]
+}
