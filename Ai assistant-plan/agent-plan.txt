@@ -1,0 +1,191 @@
+
+---
+
+## 📦 Complete System Integration Plan
+
+### **Phase 1: Foundation (Week 1-2)**
+
+
+**What to Add:**
+1. **Install pgvector extension**
+```sql
+   CREATE EXTENSION vector;
+   ALTER TABLE papers ADD COLUMN embedding vector(768);
+```
+
+2. **Add new tables**
+   - `global_papers` (deduplicated papers)
+   - `user_papers` (user associations)
+   - `project_papers` (project associations)
+   - `paper_chunks` (with embeddings)
+   - `paper_assets` (tables, equations, images)
+
+3. **Setup async processing**
+   - Install Celery + Redis
+   - Create background tasks for PDF processing
+
+4. **Add WebSocket support**
+   - Install socket.io
+   - Setup event emitters
+
+---
+
+### **Phase 2: AI Agents (Week 3-4)**
+
+**Create 4 Sub-Agents:**
+
+1. **Paper Agent** (`agents/paper_agent.py`)
+   - Tools: check_paper, parse_pdf, embed_chunks, store_paper
+   - Responsibility: Everything related to paper processing
+
+2. **Analysis Agent** (`agents/analysis_agent.py`)
+   - Tools: query_rag, compare_papers, find_gaps, extract_stats
+   - Responsibility: All analytical tasks
+
+3. **Writing Agent** (`agents/writing_agent.py`)
+   - Tools: get_schema, generate_section, add_citations, format_document
+   - Responsibility: Content generation
+
+4. **Database Agent** (`agents/database_agent.py`)
+   - Tools: create_project, update_section, add_paper_to_project, get_papers
+   - Responsibility: All database operations
+
+5. **Orchestrator Agent** (`agents/orchestrator.py`)
+   - Delegates to sub-agents
+   - Tracks progress
+   - Provides summaries
+   - Handles user conversation
+
+---
+
+### **Phase 3: Frontend Integration (Week 5)**
+
+**Update Your Existing Frontend:**
+
+1. **Add AI Chat Component** (new component)
+```jsx
+   <AIChatAssistant 
+     projectId={currentProject.id}
+     onProgress={(data) => showProgress(data)}
+     onSectionUpdate={() => refreshTables()}
+   />
+```
+
+2. **Add Progress Tracker** (overlay component)
+```jsx
+   <ProgressTracker 
+     steps={agentSteps}
+     currentStep={currentStep}
+     progress={progress}
+   />
+```
+
+3. **Update Existing Tables** (modify existing)
+   - Add "Last updated by AI" column
+   - Add "View AI generation details" button
+   - Real-time updates via WebSocket
+
+4. **Keep Your Existing Workflows**
+   - Users can still manually upload papers
+   - Users can still manually edit sections
+   - AI is an ADDITIONAL interface, not a replacement
+
+---
+
+### **Phase 4: Polish & Deploy (Week 6)**
+
+1. Error handling
+2. Rate limiting
+3. Cost monitoring
+4. User feedback system
+5. Deploy to production
+
+---
+
+## 🔧 Technical Implementation Details
+
+### **How Sub-Agents Work Together**
+```python
+# Orchestrator receives user message
+orchestrator.process_message("Generate methodology section")
+
+# Orchestrator analyzes intent
+intent = orchestrator.analyze_intent()
+# → {type: "generate_section", section: "methodology"}
+
+# Orchestrator creates plan
+plan = [
+  ("writing_agent", "get_schema", {"section": "methodology"}),
+  ("analysis_agent", "query_rag", {"section": "methodology"}),
+  ("analysis_agent", "get_assets", {"type": "table"}),
+  ("writing_agent", "generate_content", {...}),
+  ("database_agent", "save_section", {...}),
+  ("writing_agent", "create_document", {...})
+]
+
+# Execute plan step by step
+for agent_name, tool_name, params in plan:
+  agent = agents[agent_name]
+  result = agent.execute_tool(tool_name, params)
+  
+  # Emit progress event
+  emit_progress(step=tool_name, status="completed", result=result)
+  
+  # Pass result to next step
+  params_for_next_step = transform(result)
+
+# Generate summary
+summary = orchestrator.summarize_execution(results)
+return summary
+```
+
+---
+
+### **How Frontend Sees Progress**
+```javascript
+// User sends message
+sendMessage("Generate methodology section")
+
+// Backend starts processing, emits events:
+// 1. "Started analyzing request"
+// 2. "Loading section schema" ✓
+// 3. "Gathering content from papers" ✓
+// 4. "Finding relevant tables" ✓
+// 5. "Writing section" ⏳
+// 6. "Saving to database"
+// 7. "Creating document"
+
+// Frontend shows each step in real-time
+// When completed:
+// - Table row appears/updates (green highlight)
+// - Notification: "Methodology section ready!"
+// - Download button appears
+```
+
+---
+
+## 💡 Key Design Principles
+
+### **1. Conversation-First**
+Everything happens through chat. No separate "upload" or "process" buttons needed.
+
+### **2. Transparent Progress**
+User sees every step the AI takes. Builds trust.
+
+### **3. Non-Destructive**
+AI additions don't replace manual workflows. Users can do both.
+
+### **4. Modular Agents**
+Each agent has specific responsibility. Easy to debug and extend.
+
+### **5. Event-Driven**
+WebSocket events keep frontend synchronized without polling.
+
+### **6. Cost-Conscious**
+- Deduplication (process each paper once)
+- Context compression (70-98% token reduction)
+- Smart retrieval (section filtering)
+
+---
+
+## 📊 System Architecture Diagram

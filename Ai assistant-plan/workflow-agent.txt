@@ -1,0 +1,444 @@
+# Multi-Agent Workflow Architecture
+
+## 🎯 Core Philosophy
+
+**Conversational AI-First**: Users interact through natural language, not buttons.
+**Flexible Delegation**: Agents can call other agents as needed.
+**Conflict-Free**: All database operations use proper locking and transactions.
+**Production-Ready**: Error handling, monitoring, and scalability built-in.
+
+---
+
+## 🏗️ Agent Hierarchy
+
+```
+ORCHESTRATOR (Main AI)
+├── Understands user intent
+├── Creates execution plans
+├── Delegates to sub-agents
+└── Synthesizes responses
+
+SUB-AGENTS
+├── PAPER AGENT
+│   ├── PDF processing
+│   ├── Embedding generation
+│   └── Deduplication
+│
+├── DATABASE AGENT
+│   ├── CRUD operations
+│   ├── Transaction safety
+│   └── Conflict prevention
+│
+├── ANALYSIS AGENT
+│   ├── RAG queries
+│   ├── Paper comparison
+│   └── Gap identification
+│
+└── WRITING AGENT
+    ├── Section generation
+    ├── Citation formatting
+    └── Document export
+```
+
+---
+
+## 📋 Example Workflows
+
+### Workflow 1: Upload PDF
+
+```
+USER: "I have this transformer paper, can you analyze it?"
+
+ORCHESTRATOR:
+  ↓ Classifies intent: upload_paper
+  ↓ Creates plan: [check_exists, parse_pdf, embed, store, link]
+  
+PAPER AGENT (check_exists):
+  ↓ Calculate SHA256 hash
+  ↓ Query: SELECT * FROM global_papers WHERE file_hash = ?
+  ↓ Result: Not found
+  
+PAPER AGENT (parse_pdf):
+  ↓ Use Docling to extract:
+    - 8 sections
+    - 3 tables
+    - 12 equations
+    - 5 figures
+  
+PAPER AGENT (embed):
+  ↓ Chunk text (512 tokens, 50 overlap)
+  ↓ Generate 156 embeddings (nomic-embed-text-v1.5)
+  
+DATABASE AGENT (store):
+  ↓ BEGIN TRANSACTION
+  ↓ INSERT INTO global_papers → paper_id = 42
+  ↓ INSERT INTO paper_chunks (156 rows)
+  ↓ INSERT INTO paper_assets (tables, equations, figures)
+  ↓ COMMIT
+  
+DATABASE AGENT (link):
+  ↓ INSERT INTO user_papers (user_id, global_paper_id)
+  
+ORCHESTRATOR:
+  ↓ Synthesize response:
+    "✓ Paper processed successfully!
+     📄 Attention Is All You Need (Vaswani et al., 2017)
+     📊 Found: 8 sections, 3 tables, 12 equations, 5 figures
+     🧠 Generated 156 embeddings
+     💾 Stored as Paper #42"
+```
+
+### Workflow 2: Generate Methodology Section
+
+```
+USER: "Generate the methodology section for my review"
+
+ORCHESTRATOR:
+  ↓ Classifies intent: generate_section
+  ↓ Creates plan: [get_papers, query_rag, get_schema, generate, save]
+  
+DATABASE AGENT (get_papers):
+  ↓ Query: Get all papers in project_id=5
+  ↓ Result: Found 4 papers [#42, #58, #91, #103]
+  
+ANALYSIS AGENT (query_rag):
+  ↓ Generate query embedding
+  ↓ pgvector similarity search:
+    SELECT pc.text, gp.title, 
+           1 - (pc.embedding <=> $query_vec) AS similarity
+    FROM paper_chunks pc
+    WHERE pc.section_type IN ('methodology', 'experiments')
+    ORDER BY similarity DESC
+    LIMIT 20
+  ↓ Rerank top 8 chunks
+  ↓ Compress context (80% reduction)
+  
+WRITING AGENT (get_schema):
+  ↓ Load section template for "methodology"
+  ↓ Schema: {title, overview, approaches[], table, synthesis}
+  
+WRITING AGENT (generate):
+  ↓ Call Groq LLM with:
+    - Schema structure
+    - Retrieved context
+    - Instructions: "Academic tone, compare approaches"
+  ↓ Result: 800-word section with 12 citations
+  
+DATABASE AGENT (save):
+  ↓ BEGIN TRANSACTION
+  ↓ SELECT ... FROM literature_sections FOR UPDATE  -- Lock row
+  ↓ UPDATE literature_sections SET content = ...
+  ↓ COMMIT
+  ↓ Emit WebSocket event: "section_updated"
+  
+FRONTEND:
+  ↓ Receives WebSocket event
+  ↓ Refreshes literature review table
+  ↓ Shows notification: "Methodology section updated!"
+  
+ORCHESTRATOR:
+  ↓ "✓ Methodology section generated!
+     📝 800 words, 12 citations, 3 tables
+     📄 Document ready for download"
+```
+
+### Workflow 3: Compare Papers
+
+```
+USER: "Compare methodologies in my project"
+
+ORCHESTRATOR:
+  ↓ Classifies intent: compare_papers
+  ↓ Creates plan: [get_papers, query_rag, compare, save]
+  
+DATABASE AGENT (get_papers):
+  ↓ Get papers from project
+  
+ANALYSIS AGENT (query_rag):
+  ↓ Query methodology sections from all papers
+  ↓ Retrieve relevant chunks
+  
+ANALYSIS AGENT (compare):
+  ↓ Call LLM with structured prompt:
+    "Compare methodologies. Output JSON:
+     {comparison_table: [...],
+      key_differences: [...],
+      similarities: [...]}"
+  ↓ Parse structured output
+  
+DATABASE AGENT (save):
+  ↓ BEGIN TRANSACTION
+  ↓ UPDATE comparison_configs SET ...
+  ↓ INSERT INTO comparison_attributes (multiple rows)
+  ↓ COMMIT
+  ↓ Emit WebSocket: "comparison_updated"
+  
+FRONTEND:
+  ↓ Comparison tab auto-refreshes
+  ↓ Shows populated comparison matrix
+  
+ORCHESTRATOR:
+  ↓ Display rich comparison table
+  ↓ Highlight key differences
+  ↓ Suggest next actions
+```
+
+---
+
+## 🔧 Tool Design Pattern
+
+### Base Tool Class
+
+```python
+class BaseTool:
+    name: str
+    description: str
+    parameters: Dict[str, Any]
+    
+    async def execute(self, **kwargs):
+        # 1. Validate parameters
+        # 2. Execute logic
+        # 3. Log execution
+        # 4. Return result
+        pass
+```
+
+### Example: Update Section Tool
+
+```python
+class UpdateSectionTool(BaseTool):
+    name = "update_literature_section"
+    description = "Update a literature review section with transaction safety"
+    parameters = {
+        "project_id": "int",
+        "section_type": "str",
+        "content": "str",
+        "metadata": "dict"
+    }
+    
+    async def execute(self, **kwargs):
+        # Validate
+        self.validate_params(kwargs)
+        
+        # Execute with transaction
+        async with db.begin():
+            # Lock row to prevent conflicts
+            existing = await db.execute(
+                text("""
+                    SELECT id FROM literature_sections
+                    WHERE project_id = :project_id
+                    AND section_type = :section_type
+                    FOR UPDATE
+                """),
+                kwargs
+            )
+            
+            if existing:
+                # Update
+                await db.execute(
+                    text("UPDATE literature_sections SET ..."),
+                    kwargs
+                )
+            else:
+                # Insert
+                await db.execute(
+                    text("INSERT INTO literature_sections ..."),
+                    kwargs
+                )
+            
+            await db.commit()
+        
+        # Log
+        self.log_execution(kwargs, result)
+        
+        # Return
+        return {"status": "success", "section_id": ...}
+```
+
+---
+
+## 🔄 Inter-Agent Communication
+
+### Agent-to-Agent Delegation
+
+```python
+class OrchestratorAgent:
+    async def execute(self, task, context):
+        # Orchestrator delegates to sub-agent
+        result = await self.delegate_to_agent(
+            agent_name="database",
+            action="update_section",
+            context=context
+        )
+        
+        # Use result in next step
+        context.metadata.update(result)
+        
+        # Continue workflow
+        ...
+```
+
+### Context Passing
+
+```python
+class AgentContext:
+    user_id: str
+    project_id: Optional[int]
+    conversation_id: str
+    metadata: Dict[str, Any]  # Shared state
+    
+    # Context flows through entire workflow
+    # Each agent can read/write to metadata
+```
+
+---
+
+## 🎨 Frontend Integration
+
+### Chat Component
+
+```tsx
+function ChatPanel() {
+  const [messages, setMessages] = useState([]);
+  const [progress, setProgress] = useState(null);
+  const ws = useWebSocket(`/api/v1/agent/ws/${conversationId}`);
+  
+  // Listen for progress events
+  useEffect(() => {
+    ws.on('agent_progress', (event) => {
+      setProgress(event);
+    });
+    
+    ws.on('section_updated', (event) => {
+      // Refresh literature review table
+      refetchSections();
+    });
+  }, [ws]);
+  
+  return (
+    <div>
+      <MessageList messages={messages} />
+      {progress && <ProgressTracker progress={progress} />}
+      <ChatInput onSend={sendMessage} />
+    </div>
+  );
+}
+```
+
+### Progress Tracker
+
+```tsx
+function ProgressTracker({ progress }) {
+  return (
+    <div className="progress-card">
+      <div className="step-indicator">
+        {progress.step === 'parsing_pdf' && (
+          <>
+            <Loader className="animate-spin" />
+            <span>Parsing PDF with Docling...</span>
+          </>
+        )}
+        {progress.step === 'generating_embeddings' && (
+          <>
+            <Brain className="animate-pulse" />
+            <span>Generating embeddings ({progress.current}/{progress.total})</span>
+          </>
+        )}
+      </div>
+      <ProgressBar value={progress.percentage} />
+    </div>
+  );
+}
+```
+
+---
+
+## 🔒 Conflict Prevention
+
+### Database Locking Strategy
+
+```sql
+-- WRONG: Race condition possible
+UPDATE literature_sections 
+SET content = 'new content'
+WHERE project_id = 5 AND section_type = 'methodology';
+
+-- RIGHT: Lock row first
+BEGIN;
+SELECT id FROM literature_sections
+WHERE project_id = 5 AND section_type = 'methodology'
+FOR UPDATE;  -- Locks the row
+
+UPDATE literature_sections
+SET content = 'new content'
+WHERE id = <locked_id>;
+
+COMMIT;
+```
+
+### Optimistic Locking
+
+```python
+# Add version column
+class LiteratureSection:
+    version: int = 0
+    
+# Update with version check
+UPDATE literature_sections
+SET content = :content,
+    version = version + 1
+WHERE id = :id AND version = :expected_version
+
+# If no rows updated → conflict detected
+```
+
+---
+
+## 📊 Monitoring & Observability
+
+### Structured Logging
+
+```python
+logger.info(
+    "agent_task_started",
+    agent="orchestrator",
+    task_id=task_id,
+    user_id=user_id,
+    intent=intent
+)
+
+logger.info(
+    "tool_executed",
+    tool="update_section",
+    duration_ms=duration,
+    success=True
+)
+```
+
+### Metrics
+
+```python
+# Track LLM usage
+metrics.increment("llm.calls", tags=["model:llama-3.1-70b"])
+metrics.histogram("llm.tokens", token_count)
+metrics.histogram("llm.cost", cost_usd)
+
+# Track agent performance
+metrics.histogram("agent.duration", duration_ms, tags=["agent:orchestrator"])
+metrics.increment("agent.errors", tags=["agent:database"])
+```
+
+---
+
+## 🚀 Deployment Checklist
+
+- [ ] Environment variables configured
+- [ ] Database migrations applied
+- [ ] pgvector extension installed
+- [ ] Redis running (for Celery)
+- [ ] Groq API key valid
+- [ ] Health checks passing
+- [ ] Monitoring enabled
+- [ ] Logs aggregated
+- [ ] Backups configured
+- [ ] Rollback plan ready
