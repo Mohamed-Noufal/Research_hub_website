@@ -64,6 +64,7 @@ async def get_research_gaps(
             rg.description,
             rg.priority,
             rg.status,
+            rg.notes,
             COALESCE(
                 json_agg(gpa.paper_id) FILTER (WHERE gpa.paper_id IS NOT NULL),
                 '[]'::json
@@ -71,7 +72,7 @@ async def get_research_gaps(
         FROM research_gaps rg
         LEFT JOIN gap_paper_associations gpa ON gpa.gap_id = rg.id
         WHERE rg.user_id = :user_id AND rg.project_id = :project_id
-        GROUP BY rg.id, rg.description, rg.priority, rg.status
+        GROUP BY rg.id, rg.description, rg.priority, rg.status, rg.notes
         ORDER BY 
             CASE rg.priority 
                 WHEN 'High' THEN 1 

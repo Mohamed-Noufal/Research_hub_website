@@ -1026,20 +1026,92 @@ class UserService:
                     "differences": "Methodological diversity: systematic reviews (Papers 1,4,5) vs. empirical studies (Papers 2,3). Geographic focus varies from single-site (Paper 3) to international (Paper 2). Outcome measures range from technical performance to implementation success."
                 })
                 
-                # Add comparison attributes for key papers
+                # Add comprehensive comparison attributes for ALL papers and ALL fields
                 comparison_attributes = [
+                    # ===== PAPER 1: Deep Learning Review =====
+                    # General Information
+                    {"paper_id": 1, "attr": "venue", "value": "Nature Medicine"},
+                    {"paper_id": 1, "attr": "sampleSize", "value": "150 studies (meta-analysis of published research)"},
+                    {"paper_id": 1, "attr": "qualityScore", "value": "9/10 - High quality systematic review with rigorous methodology"},
                     {"paper_id": 1, "attr": "sample_size", "value": "150 studies"},
-                    {"paper_id": 1, "attr": "study_design", "value": "Systematic Review"},
-                    {"paper_id": 1, "attr": "key_metric", "value": "AUC 0.94"},
+                    {"paper_id": 1, "attr": "study_design", "value": "Systematic Review & Meta-Analysis"},
+                    {"paper_id": 1, "attr": "key_metric", "value": "AUC 0.94 for fracture detection"},
+                    # Methodology
+                    {"paper_id": 1, "attr": "methodologySummary", "value": "Comprehensive systematic review following PRISMA guidelines. Searched 5 databases (PubMed, Scopus, Web of Science, IEEE, arXiv) for studies published 2018-2023. Included only peer-reviewed studies with validation datasets."},
+                    {"paper_id": 1, "attr": "methodologyType", "value": "Systematic Review with Meta-Analysis"},
+                    {"paper_id": 1, "attr": "dataCollection", "value": "Secondary data from 150 published studies. Extracted performance metrics, study characteristics, and demographic data. Two independent reviewers with conflict resolution protocol."},
+                    {"paper_id": 1, "attr": "analysisMethod", "value": "Random-effects meta-analysis for pooled AUC. Subgroup analysis by imaging modality (X-ray, CT, MRI). Meta-regression for heterogeneity exploration. Publication bias assessed via funnel plots and Egger's test."},
+                    # Findings
+                    {"paper_id": 1, "attr": "keyFindings", "value": "DL models achieved parity with radiologists in 85% of diagnostic tasks. Superior performance in fracture detection (pooled AUC 0.94 vs radiologist 0.89, p<0.001) and lung nodule classification (AUC 0.92 vs 0.87). Ensemble models outperformed single architectures by 7-12%. Performance degraded significantly on external validation sets (-15% average AUC drop)."},
+                    {"paper_id": 1, "attr": "limitations", "value": "High heterogeneity across studies (I²=78%). Most studies lacked external validation and diverse demographic representation. Limited data on rare conditions and pediatric populations. Publication bias detected (p=0.03). Insufficient reporting of model calibration and clinical utility metrics."},
+                    
+                    # ===== PAPER 2: AI Adoption Survey =====
+                    # General Information
+                    {"paper_id": 2, "attr": "venue", "value": "JAMA (Journal of the American Medical Association)"},
+                    {"paper_id": 2, "attr": "sampleSize", "value": "500 healthcare facilities across 15 countries"},
+                    {"paper_id": 2, "attr": "qualityScore", "value": "8/10 - Well-designed survey with validated instruments"},
                     {"paper_id": 2, "attr": "sample_size", "value": "500 clinics"},
-                    {"paper_id": 2, "attr": "study_design", "value": "Cross-sectional Survey"},
-                    {"paper_id": 2, "attr": "key_metric", "value": "78% cite expertise gap"},
+                    {"paper_id": 2, "attr": "study_design", "value": "Cross-sectional Survey Study"},
+                    {"paper_id": 2, "attr": "key_metric", "value": "78% report lack of technical expertise as primary barrier"},
+                    # Methodology
+                    {"paper_id": 2, "attr": "methodologySummary", "value": "International cross-sectional survey using stratified random sampling. Targeted healthcare facilities in 15 countries (5 high-income, 7 middle-income, 3 low-income). Mixed-methods approach combining quantitative survey (n=500) with qualitative interviews (n=50)."},
+                    {"paper_id": 2, "attr": "methodologyType", "value": "Cross-Sectional Survey with Mixed Methods"},
+                    {"paper_id": 2, "attr": "dataCollection", "value": "Online survey distributed to hospital administrators and IT directors. 45-minute structured questionnaire covering: current AI adoption status, barriers, facilitators, resource allocation, and future plans. Follow-up interviews with subset of respondents. Response rate: 67% (500/750)."},
+                    {"paper_id": 2, "attr": "analysisMethod", "value": "Descriptive statistics for adoption rates. Chi-square tests for categorical associations. Logistic regression to identify predictors of successful AI implementation. Thematic analysis of qualitative interview data using NVivo software. Stratified analysis by country income level and facility size."},
+                    # Findings
+                    {"paper_id": 2, "attr": "keyFindings", "value": "Only 23% of facilities have deployed AI in clinical workflows. Key barriers: lack of technical expertise (78%), integration challenges with existing systems (65%), cost concerns (61%), and regulatory uncertainty (54%). Successful implementations shared common factors: dedicated AI champion (OR=4.2), phased rollout strategy (OR=3.8), and vendor partnership (OR=2.9). High-income countries had 3.5x higher adoption rates than low-income countries."},
+                    {"paper_id": 2, "attr": "limitations", "value": "Survey response bias toward early adopters and tech-forward institutions. Self-reported data without independent verification. Limited longitudinal data on sustained AI usage and clinical impact. Convenience sampling in some low-income countries. Language barriers may have affected response quality in non-English speaking regions."},
+                    
+                    # ===== PAPER 3: Neural Networks Case Study =====
+                    # General Information
+                    {"paper_id": 3, "attr": "venue", "value": "Radiology"},
+                    {"paper_id": 3, "attr": "sampleSize", "value": "Single hospital (600 beds), 18-month implementation period"},
+                    {"paper_id": 3, "attr": "qualityScore", "value": "7/10 - Detailed case study but limited generalizability"},
                     {"paper_id": 3, "attr": "sample_size", "value": "1 hospital (600 beds)"},
                     {"paper_id": 3, "attr": "study_design", "value": "Longitudinal Case Study"},
-                    {"paper_id": 3, "attr": "key_metric", "value": "35% time reduction"},
+                    {"paper_id": 3, "attr": "key_metric", "value": "35% reduction in report turnaround time"},
+                    # Methodology
+                    {"paper_id": 3, "attr": "methodologySummary", "value": "Prospective longitudinal case study documenting neural network deployment in a 600-bed academic medical center. Tracked implementation from pilot phase (months 1-3) through full deployment (months 4-18). Mixed-methods evaluation combining quantitative performance metrics with qualitative staff feedback."},
+                    {"paper_id": 3, "attr": "methodologyType", "value": "Longitudinal Case Study with Pre-Post Analysis"},
+                    {"paper_id": 3, "attr": "dataCollection", "value": "Baseline data collection (3 months pre-implementation): radiology report turnaround times, diagnostic accuracy rates, radiologist workload metrics. Post-implementation: same metrics collected monthly for 18 months. Quarterly surveys of radiologists (n=24) and technologists (n=45). Monthly focus groups during first 6 months."},
+                    {"paper_id": 3, "attr": "analysisMethod", "value": "Interrupted time series analysis for turnaround time trends. McNemar's test for paired diagnostic accuracy comparisons. Segmented regression to detect change points. Qualitative thematic analysis of survey responses and focus group transcripts. Cost-benefit analysis including implementation costs, maintenance, and efficiency gains."},
+                    # Findings
+                    {"paper_id": 3, "attr": "keyFindings", "value": "Neural network reduced average radiology report turnaround time by 35% (from 4.2 to 2.7 hours, p<0.001). Diagnostic accuracy for fractures improved by 12% (from 87% to 97.4%, p<0.001). Initial radiologist resistance (62% negative sentiment) shifted to acceptance after 6-month adaptation period (78% positive sentiment). Workload redistribution allowed radiologists to focus on complex cases. ROI achieved at month 14."},
+                    {"paper_id": 3, "attr": "limitations", "value": "Single-site study limits generalizability to other settings. Academic medical center may not represent community hospitals. Implementation costs ($450K initial + $80K annual) may not be feasible for smaller facilities. Hawthorne effect possible due to staff awareness of study. No control group for comparison. Selection bias in which cases were routed to AI system."},
+                    
+                    # ===== PAPER 4: ML Predictive Analytics =====
+                    # General Information
+                    {"paper_id": 4, "attr": "venue", "value": "The Lancet Digital Health"},
+                    {"paper_id": 4, "attr": "sampleSize", "value": "85 machine learning studies across multiple clinical domains"},
+                    {"paper_id": 4, "attr": "qualityScore", "value": "9/10 - Comprehensive meta-analysis with rigorous quality assessment"},
                     {"paper_id": 4, "attr": "sample_size", "value": "85 ML studies"},
-                    {"paper_id": 4, "attr": "study_design", "value": "Meta-Analysis"},
-                    {"paper_id": 4, "attr": "key_metric", "value": "AUC 0.88-0.91"},
+                    {"paper_id": 4, "attr": "study_design", "value": "Meta-Analysis of ML Models"},
+                    {"paper_id": 4, "attr": "key_metric", "value": "Ensemble models: AUC 0.88-0.91 across prediction tasks"},
+                    # Methodology
+                    {"paper_id": 4, "attr": "methodologySummary", "value": "Systematic review and meta-analysis of machine learning models for patient outcome prediction. Searched 6 databases for studies published 2015-2023. Included studies with: (1) ML models for clinical prediction, (2) validation datasets, (3) reported AUC/C-statistic. Excluded: animal studies, non-English papers, conference abstracts."},
+                    {"paper_id": 4, "attr": "methodologyType", "value": "Systematic Review & Meta-Analysis of Prediction Models"},
+                    {"paper_id": 4, "attr": "dataCollection", "value": "Extracted data: ML algorithm type, sample size, outcome definition, performance metrics (AUC, sensitivity, specificity, calibration), validation method, clinical domain. Quality assessed using PROBAST tool. Two independent reviewers with third-party arbitration for conflicts. Contacted 23 authors for missing data (17 responded)."},
+                    {"paper_id": 4, "attr": "analysisMethod", "value": "Hierarchical meta-analysis accounting for within-study correlation. Subgroup analysis by: algorithm type (gradient boosting, neural networks, random forest, SVM), clinical domain, validation method (internal vs external). Meta-regression for sample size effects. Network meta-analysis to compare algorithm performance. Calibration assessed via calibration-in-the-large and calibration slope."},
+                    # Findings
+                    {"paper_id": 4, "attr": "keyFindings", "value": "Ensemble models outperformed single algorithms across all prediction tasks (mean AUC difference +0.06, 95% CI 0.04-0.08). Best performance by task: gradient boosting for readmission (AUC 0.88, 95% CI 0.85-0.91), neural networks for mortality (AUC 0.91, 95% CI 0.88-0.94), random forest for sepsis (AUC 0.87, 95% CI 0.84-0.90). External validation performance dropped by average 0.11 AUC points. Only 34% of studies reported calibration metrics."},
+                    {"paper_id": 4, "attr": "limitations", "value": "High heterogeneity in study quality (PROBAST: 23% low risk, 41% moderate, 36% high risk). Inconsistent outcome definitions across studies complicated pooling. Limited reporting of model calibration (only 34% of studies). Publication bias toward positive results (funnel plot asymmetry p=0.02). Insufficient data on clinical utility and decision curve analysis. Most studies from high-income countries with limited diversity in training data."},
+                    
+                    # ===== PAPER 5: Ethical Considerations =====
+                    # General Information
+                    {"paper_id": 5, "attr": "venue", "value": "AI & Ethics (Springer)"},
+                    {"paper_id": 5, "attr": "sampleSize", "value": "120 papers on AI ethics in healthcare"},
+                    {"paper_id": 5, "attr": "qualityScore", "value": "8/10 - Comprehensive ethical framework with practical guidelines"},
+                    {"paper_id": 5, "attr": "sample_size", "value": "120 ethics papers"},
+                    {"paper_id": 5, "attr": "study_design", "value": "Systematic Literature Review"},
+                    {"paper_id": 5, "attr": "key_metric", "value": "7 core ethical principles identified"},
+                    # Methodology
+                    {"paper_id": 5, "attr": "methodologySummary", "value": "Systematic literature review of ethical frameworks for AI in healthcare. Searched academic databases and grey literature for papers published 2015-2022. Included: peer-reviewed articles, policy documents, regulatory guidelines, and expert consensus statements addressing AI ethics in clinical diagnosis or decision support."},
+                    {"paper_id": 5, "attr": "methodologyType", "value": "Systematic Literature Review with Framework Synthesis"},
+                    {"paper_id": 5, "attr": "dataCollection", "value": "Database search: PubMed, Scopus, PhilPapers, SSRN, and regulatory agency websites (FDA, EMA, WHO). Search terms: ('artificial intelligence' OR 'machine learning') AND ('ethics' OR 'governance' OR 'regulation') AND ('healthcare' OR 'clinical' OR 'diagnosis'). Included 120 documents after screening 847 initial results. Data extracted: ethical principles proposed, governance mechanisms, case examples, implementation challenges."},
+                    {"paper_id": 5, "attr": "analysisMethod", "value": "Thematic synthesis approach: (1) line-by-line coding of ethical principles and recommendations, (2) development of descriptive themes, (3) generation of analytical themes through team discussion. Framework consolidation using modified Delphi method with 15 expert panelists (ethicists, clinicians, AI researchers, regulators). Three rounds of feedback to achieve consensus on unified framework."},
+                    # Findings
+                    {"paper_id": 5, "attr": "keyFindings", "value": "Identified 7 core ethical principles for AI in diagnosis: (1) Transparency - explainable AI decisions, (2) Accountability - clear responsibility chains, (3) Fairness - bias mitigation and equity, (4) Privacy - data protection and consent, (5) Safety - rigorous validation and monitoring, (6) Human Oversight - clinician final authority, (7) Continuous Monitoring - post-deployment surveillance. Proposed 3-tier governance framework: institutional review boards, regulatory oversight, and professional society guidelines. Highlighted need for diverse stakeholder involvement in AI development."},
+                    {"paper_id": 5, "attr": "limitations", "value": "Framework requires validation in real-world clinical settings. Limited guidance on resolving conflicts between competing ethical principles (e.g., transparency vs. privacy). Predominantly Western ethical perspectives with limited representation from non-Western contexts. Rapid AI evolution may outpace framework applicability. Implementation challenges not fully addressed (resource requirements, training needs, organizational change management). Lack of empirical data on framework effectiveness."},
                 ]
                 
                 for attr in comparison_attributes:

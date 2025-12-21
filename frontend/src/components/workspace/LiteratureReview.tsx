@@ -174,35 +174,51 @@ function ProjectList({ onOpenProject }: { onOpenProject: (p: Project) => void })
 
       {/* Create Project Modal */}
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create New Project</DialogTitle>
+        <DialogContent className="sm:max-w-[500px] bg-white p-0 gap-0 overflow-hidden shadow-2xl rounded-2xl border border-gray-100">
+          <DialogHeader className="px-6 py-5 border-b border-gray-100 bg-gray-50/50">
+            <DialogTitle className="text-lg font-semibold text-gray-900 tracking-tight">Create New Research Project</DialogTitle>
+            <p className="text-sm text-gray-500 mt-1">Start a new systematic review or literature analysis.</p>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+
+          <div className="p-6 space-y-5 bg-white">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Project Name</label>
+              <label className="text-sm font-medium text-gray-700 ml-1">Project Name <span className="text-red-500">*</span></label>
               <input
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-gray-400 text-gray-900"
                 value={newProjectTitle}
                 onChange={(e) => setNewProjectTitle(e.target.value)}
                 placeholder="e.g., AI in Healthcare Review"
                 autoFocus
               />
             </div>
+
             <div className="space-y-2">
-              <label className="text-sm font-medium">Description</label>
+              <label className="text-sm font-medium text-gray-700 ml-1">Description <span className="text-xs font-normal text-gray-400">(Optional)</span></label>
               <textarea
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-gray-400 text-gray-900 resize-none"
                 value={newProjectDesc}
                 onChange={(e) => setNewProjectDesc(e.target.value)}
-                placeholder="Optional description..."
-                rows={3}
+                placeholder="Briefly describe the goals of this research..."
+                rows={4}
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreate} disabled={!newProjectTitle.trim()}>Create Project</Button>
+
+          <DialogFooter className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setIsCreateOpen(false)}
+              className="h-10 px-4 text-gray-600 hover:text-gray-700 border-gray-200 hover:bg-white hover:shadow-sm transition-all"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreate}
+              disabled={!newProjectTitle.trim()}
+              className="h-10 px-6 bg-indigo-600 hover:bg-indigo-700 text-white shadow-md hover:shadow-lg hover:shadow-indigo-500/20 transition-all disabled:opacity-50 disabled:shadow-none"
+            >
+              Create Project
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -245,13 +261,14 @@ function ProjectWorkspace({ project, onBack }: { project: Project, onBack: () =>
       const response = await usersApi.seedProject(project.id);
 
       if (response.status === 'seeded') {
-        // Refetch everything
+        // Refetch project papers without full page reload
         await refetchPapers();
-        // Force parent update
-        window.location.reload();
+        // Show success message
+        alert('Demo template loaded successfully!');
       }
     } catch (e) {
       console.error("Failed to seed project", e);
+      alert('Failed to load template. Please check the console for errors.');
     }
   };
 
