@@ -15,12 +15,13 @@ class OrchestratorAgent:
     Handles user requests and delegates to appropriate tools
     """
     
-    def __init__(self, llm_client: LLMClient, db, rag_engine: RAGEngine):
+    
+    def __init__(self, llm_client: LLMClient, db, rag_engine: Optional[RAGEngine] = None):
         self.llm = llm_client
         self.db = db
         self.rag = rag_engine
         
-        # Initialize tools
+        # Initialize tools (only include RAG tools if RAG is available)
         self.tools = self._create_tools()
         
         # Create flexible agent
@@ -32,8 +33,8 @@ class OrchestratorAgent:
     
     def _create_tools(self) -> List[Tool]:
         """Create all available tools"""
-        return [
-            # Database tools
+        tools = [
+            # Database tools (always available)
             Tool(
                 name="get_project_papers",
                 description="Get all papers in a project. Useful to see what papers are available for comparison or context.",
@@ -72,45 +73,52 @@ class OrchestratorAgent:
                     db=self.db
                 )
             ),
-            
-            # RAG tools
-            Tool(
-                name="semantic_search",
-                description="Search papers semantically for specific topics, concepts, or keywords.",
-                parameters={
-                    "query": "str",
-                    "project_id": "int (optional)",
-                    "top_k": "int (default 10)"
-                },
-                function=lambda **kwargs: rag_tools.semantic_search(
-                    **kwargs,
-                    rag_engine=self.rag
-                )
-            ),
-            Tool(
-                name="compare_papers",
-                description="Compare a list of papers on a specific aspect (e.g., methodology, findings, datasets). Returns similarities and differences.",
-                parameters={
-                    "paper_ids": "list of int",
-                    "aspect": "str (methodology, findings, etc.)"
-                },
-                function=lambda **kwargs: rag_tools.compare_papers(
-                    **kwargs,
-                    rag_engine=self.rag,
-                    llm_client=self.llm,
-                    project_id=self.agent.context.get('project_id') if self.agent.context else None
-                )
-            ),
-            Tool(
-                name="extract_methodology",
-                description="Extract structured methodology details from a specific paper.",
-                parameters={"paper_id": "int"},
-                function=lambda **kwargs: rag_tools.extract_methodology(
-                    **kwargs,
-                    rag_engine=self.rag,
-                    llm_client=self.llm
-                )
-            ),
+        ]
+        
+        # Add RAG tools only if RAG engine is available
+        if self.rag:
+            tools.extend([
+                Tool(
+                    name="semantic_search",
+                    description="Search papers semantically for specific topics, concepts, or keywords.",
+                    parameters={
+                        "query": "str",
+                        "project_id": "int (optional)",
+                        "top_k": "int (default 10)"
+                    },
+                    function=lambda **kwargs: rag_tools.semantic_search(
+                        **kwargs,
+                        rag_engine=self.rag
+                    )
+                ),
+                Tool(
+                    name="compare_papers",
+                    description="Compare a list of papers on a specific aspect (e.g., methodology, findings, datasets). Returns similarities and differences.",
+                    parameters={
+                        "paper_ids": "list of int",
+                        "aspect": "str (methodology, findings, etc.)"
+                    },
+                    function=lambda **kwargs: rag_tools.compare_papers(
+                        **kwargs,
+                        rag_engine=self.rag,
+                        llm_client=self.llm,
+                        project_id=self.agent.context.get('project_id') if self.agent.context else None
+                    )
+                ),
+                Tool(
+                    name="extract_methodology",
+                    description="Extract structured methodology details from a specific paper.",
+                    parameters={"paper_id": "int"},
+                    function=lambda **kwargs: rag_tools.extract_methodology(
+                        **kwargs,
+                        rag_engine=self.rag,
+                        llm_client=self.llm
+                    )
+                ),
+            ])
+        
+        # Background job tools (always available)
+        tools.extend([
              Tool(
                 name="parse_pdf",
                 description="Parse a PDF file in the background. Handles extraction of text, tables, etc.",
@@ -132,7 +140,9 @@ class OrchestratorAgent:
                     job_id=kwargs.get('job_id')
                 )
             )
-        ]
+        ])
+        
+        return tools
     
     async def process_user_message(
         self,

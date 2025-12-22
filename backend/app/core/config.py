@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     DEBUG_LOG_LEVEL: str = "INFO"
     
     # AI Agent Configuration
-    AGENT_MAX_ITERATIONS: int = 10
+    AGENT_MAX_ITERATIONS: int = 3  # Reduced from 10 for production (saves API costs)
     AGENT_TIMEOUT_SECONDS: int = 300
     EMBEDDING_MODEL: str = "BAAI/bge-small-en-v1.5"
     CHUNK_SIZE: int = 512

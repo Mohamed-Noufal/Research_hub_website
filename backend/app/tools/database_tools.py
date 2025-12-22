@@ -69,7 +69,7 @@ async def get_project_papers(
                 p.abstract,
                 p.doi,
                 p.source,
-                p.published_date,
+                p.publication_date,
                 pp.added_at,
                 p.is_processed
             FROM papers p

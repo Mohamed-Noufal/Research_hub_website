@@ -79,9 +79,14 @@ class LLMClient:
             
         except Exception as e:
             logger.error(f"Failed to log LLM usage: {e}")
+            # Rollback to prevent transaction errors
+            try:
+                self.db.rollback()
+            except:
+                pass
 
     @retry(
-        stop=stop_after_attempt(3),
+        stop=stop_after_attempt(2),  # Reduced from 3 for production (1 retry only)
         wait=wait_exponential(multiplier=1, min=2, max=10)
     )
     async def complete(

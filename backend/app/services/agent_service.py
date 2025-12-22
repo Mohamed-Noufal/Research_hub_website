@@ -30,9 +30,10 @@ class AgentService:
             try:
                 db = SessionLocal()
                 llm = LLMClient(db)
-                rag = RAGEngine()
+                # RAG is lazy-loaded only when tools need it (prevents 60s startup delay)
+                rag = None  
                 AgentService._orchestrator = OrchestratorAgent(llm, db, rag)
-                logger.info("✅ Orchestrator Agent initialized in Service")
+                logger.info("✅ Orchestrator Agent initialized in Service (RAG will load on first use)")
             except Exception as e:
                 logger.error(f"❌ Failed to initialize Orchestrator: {e}")
                 # We don't raise here to allow API to start, but agent endpoints will fail
@@ -167,6 +168,7 @@ class AgentService:
                 db.commit()
                 
                 yield {"type": "message", "role": "assistant", "content": final_answer}
+                yield {"type": "message_end"}  # Signal completion to frontend
                 
             except Exception as e:
                 logger.error(f"Agent execution failed: {e}")

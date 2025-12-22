@@ -25,7 +25,7 @@ class FlexibleAgent:
         name: str,
         llm_client: Any,
         tools: List[Tool],
-        max_iterations: int = 10
+        max_iterations: int = 3  # Reduced from 10 for production efficiency
     ):
         self.name = name
         self.llm = llm_client
@@ -40,24 +40,24 @@ class FlexibleAgent:
             for t in self.tools.values()
         ])
         
-        return f"""You are {self.name}, an AI research assistant.
-You have access to the following tools:
+        return f"""You are {self.name}, an AI assistant helping with academic literature reviews.
 
+Available Tools:
 {tool_descs}
 
-To use a tool, output ONLY a JSON block like this:
-{{
-    "action": "tool_name",
-    "action_input": {{ "param": "value" }}
-}}
+CRITICAL INSTRUCTIONS:
+1. For simple greetings or general questions, respond with ONLY:
+{{"action": "Final Answer", "action_input": "Your friendly response here"}}
 
-When you have the final answer, output:
-{{
-    "action": "Final Answer",
-    "action_input": "Your response here"
-}}
+2. For tasks requiring tools, respond with ONLY:
+{{"action": "tool_name", "action_input": {{"param": "value"}}}}
 
-Refuse to answer if outside your scope.
+3. After using tools and having enough information, respond with ONLY:
+{{"action": "Final Answer", "action_input": "Your complete answer based on observations"}}
+
+RESPONSE FORMAT: Pure JSON only, no markdown, no explanation before or after.
+BAD: "Let me help you..." or "Sure, I'll..."
+GOOD: {{"action": "Final Answer", "action_input": "Hello! I'm your AI research assistant..."}}
 """
 
     async def run(self, input_text: str) -> Dict[str, Any]:
@@ -65,6 +65,7 @@ Refuse to answer if outside your scope.
         Run the agent loop (Think -> Act -> Observe)
         """
         history = [f"User: {input_text}"]
+        last_action = None  # Track last action to prevent loops
         
         for i in range(self.max_iterations):
             # 1. THINK
@@ -85,13 +86,31 @@ Refuse to answer if outside your scope.
                 action = action_data.get("action")
                 action_input = action_data.get("action_input")
                 
+                # Loop detection: Stop if trying same action twice in a row
+                if action == last_action and action != "Final Answer":
+                    logger.warning(f"🔁 Loop detected: '{action}' called twice. Forcing final answer.")
+                    return {
+                        "result": "I apologize, but I'm having trouble completing this task. Could you rephrase your question?",
+                        "status": "loop_detected",
+                        "steps": i+1
+                    }
+                last_action = action
+                
                 logger.info(f"🤔 Step {i+1}: Decision -> {action}")
                 
             except Exception as e:
                 # Failed to parse, treat as text response
-                logger.warning(f"Failed to parse action: {e}. Raw: {response}")
-                # If it looks like a final answer (no JSON), just return it
-                return {"result": response, "status": "conversational", "steps": i+1}
+                logger.warning(f"Failed to parse action: {e}. Raw response: {response[:200]}")
+                # If this is a simple greeting/conversational message, just return it
+                if i == 0 and len(response) < 500:
+                    return {
+                        "result": response, 
+                        "status": "conversational", 
+                        "steps": i+1
+                    }
+                # Otherwise log and continue
+                history.append(f"Assistant response (unparsable): {response}")
+                continue
 
             # 2. ACT
             if action == "Final Answer":
@@ -104,11 +123,20 @@ Refuse to answer if outside your scope.
             if action in self.tools:
                 tool = self.tools[action]
                 try:
-                    # Execute tool
-                    # Pass agent context if needed by tool (implicitly handling kwargs)
-                    # For simplicity, passing kwargs matching function sig
-                    # In production, inspect function sig to match args safer
-                    observation = await tool.function(**action_input) if asyncio.iscoroutinefunction(tool.function) else tool.function(**action_input)
+                    # Execute tool - properly handle async
+                    import inspect
+                    if inspect.iscoroutinefunction(tool.function):
+                        observation = await tool.function(**action_input)
+                    else:
+                        # Check if it's a lambda wrapping an async function
+                        try:
+                            result = tool.function(**action_input)
+                            if inspect.iscoroutine(result):
+                                observation = await result
+                            else:
+                                observation = result
+                        except Exception as exec_err:
+                            raise exec_err
                     
                     # 3. OBSERVE
                     result_str = f"Observation: {observation}"
@@ -116,7 +144,8 @@ Refuse to answer if outside your scope.
                     logger.info(f"👀 Observation: {str(observation)[:100]}...")
                     
                 except Exception as e:
-                    history.append(f"Action: {action}\nError: {str(e)}")
+                    error_msg = str(e)[:200]  # Truncate long errors
+                    history.append(f"Action: {action}\nError: {error_msg}")
                     logger.error(f"Tool execution failed: {e}")
             else:
                 history.append(f"Error: Unknown tool '{action}'")
