@@ -1,13 +1,34 @@
 fastapi
 uvicorn[standard]
 python-multipart
-groq
-sentence-transformers
-pgvector
 sqlalchemy
 psycopg2-binary>=2.9.11
-
-redis==5.0.1
-httpx
 python-dotenv
 pydantic-settings
+httpx
+
+# LlamaIndex (RAG Framework)
+llama-index-core
+llama-index-llms-groq
+llama-index-embeddings-huggingface
+llama-index-vector-stores-postgres
+
+# AI & LLM
+groq
+tiktoken
+
+# Vector Database & Embeddings (already have)
+pgvector
+sentence-transformers
+
+# PDF Parsing with Docling (NEW - for academic papers)
+docling
+docling-core
+
+# Utilities
+redis
+websockets
+tenacity
+arq
+tiktoken
+pymupdf

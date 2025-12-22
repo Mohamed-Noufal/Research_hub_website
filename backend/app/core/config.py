@@ -23,15 +23,7 @@ class Settings(BaseSettings):
     NCBI_API_KEY: Optional[str] = None  # For PubMed API access
     
     # CORS
-    CORS_ORIGINS: list = [
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:5174"
-    ]
+    CORS_ORIGINS: list = ["*"]
     
     # Cache Settings
     CACHE_TTL: int = 3600  # 1 hour
@@ -43,6 +35,13 @@ class Settings(BaseSettings):
     # Debug Settings
     DEBUG_MODE: bool = False
     DEBUG_LOG_LEVEL: str = "INFO"
+    
+    # AI Agent Configuration
+    AGENT_MAX_ITERATIONS: int = 10
+    AGENT_TIMEOUT_SECONDS: int = 300
+    EMBEDDING_MODEL: str = "BAAI/bge-small-en-v1.5"
+    CHUNK_SIZE: int = 512
+    CHUNK_OVERLAP: int = 50
     
     class Config:
         env_file = ".env"

@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .core.config import settings
 from .core.database import init_db
-from .api.v1 import papers, users, search_history, admin, folders, table_config, methodology, findings, comparison, synthesis, analysis
+from .api.v1 import papers, users, search_history, admin, folders, table_config, methodology, findings, comparison, synthesis, analysis, agent
 
 # Lifespan context manager for startup/shutdown events
 @asynccontextmanager
@@ -132,6 +132,12 @@ app.include_router(
     analysis.router,
     prefix=settings.API_V1_PREFIX,
     tags=["analysis"]
+)
+
+app.include_router(
+    agent.router,
+    prefix=settings.API_V1_PREFIX,
+    tags=["agent"]
 )
 
 

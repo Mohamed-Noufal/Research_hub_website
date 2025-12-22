@@ -376,7 +376,7 @@ const Workspace = ({ savedPapers = [], onNavigate, onSearch }: WorkspaceProps) =
       case 'notes':
         return <NotesManager />;
       case 'assistant':
-        return <AIAssistant papers={backendSavedPapers} />;
+        return <AIAssistant papers={backendSavedPapers} projectId={tab.projectId} />;
       case 'literature-review':
         return <LiteratureReview initialProjectId={tab.projectId} />;
       case 'citations':
