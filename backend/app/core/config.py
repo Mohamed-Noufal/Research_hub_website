@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     CORE_API_KEY: Optional[str] = None  # For CORE repository access
     NCBI_API_KEY: Optional[str] = None  # For PubMed API access
     
+    # Monitoring
+    PHOENIX_COLLECTOR_URL: str = "http://localhost:4317"  # Phoenix OTLP endpoint
+
     # CORS
     CORS_ORIGINS: list = ["*"]
     

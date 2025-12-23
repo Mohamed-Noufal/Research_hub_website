@@ -36,6 +36,18 @@ class OrchestratorAgent:
         tools = [
             # Database tools (always available)
             Tool(
+                name="get_project_by_name",
+                description="Find a project by name (supports fuzzy matching). Use this when user mentions a project name like 'Test 1' or 'Literature Review'.",
+                parameters={
+                    "project_name": "str",
+                    "user_id": "str"
+                },
+                function=lambda **kwargs: database_tools.get_project_by_name(
+                    **kwargs,
+                    db=self.db
+                )
+            ),
+            Tool(
                 name="get_project_papers",
                 description="Get all papers in a project. Useful to see what papers are available for comparison or context.",
                 parameters={"project_id": "int"},
@@ -172,3 +184,22 @@ class OrchestratorAgent:
         result = await self.agent.run(message)
         
         return result
+    
+    async def process_user_message_streaming(
+        self,
+        user_id: str,
+        message: str,
+        project_id: Optional[int] = None
+    ):
+        """
+        Streaming version that yields agent thinking steps
+        """
+        # Add context to agent for tools to access
+        self.agent.context = {
+            'user_id': user_id,
+            'project_id': project_id
+        }
+        
+        # Stream agent execution
+        async for event in self.agent.run_streaming(message):
+            yield event

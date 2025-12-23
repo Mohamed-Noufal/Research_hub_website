@@ -11,6 +11,11 @@ async def lifespan(app: FastAPI):
     """Handle application startup and shutdown events"""
     # Startup
     print("🚀 Starting Research Paper Search API...")
+    
+    # Initialize Monitoring (Phoenix/OTel)
+    from .core.monitoring import MonitoringManager
+    MonitoringManager.get_instance()
+    
     init_db()
     print("✅ Application ready!")
 

@@ -107,13 +107,15 @@ class AgentService:
     ) -> AsyncGenerator[Dict, None]:
         """
         Process a user message and stream updates/response
-        Using generator to support WebSocket streaming of "Thinking" steps
+        Now streams agent thinking steps in real-time
         """
         if not self._orchestrator:
             yield {"type": "error", "content": "Agent system not initialized"}
             return
 
         db = SessionLocal()
+        final_answer = None
+        
         try:
             # 1. Save User Message
             db.execute(
@@ -125,54 +127,47 @@ class AgentService:
             )
             db.commit()
             
-            # 2. Run Agent
-            # Note: The Orchestrator currently returns a single result. 
-            # Phase 4 enhancement: We could modify orchestrator to yield steps if we wanted streaming steps.
-            # For now, we simulate "Working" state or use a simple await.
-            
-            yield {"type": "status", "status": "thinking", "message": "Analyzing request..."}
-            
-            # Update context
+            # Update context if project provided
             if project_id:
-                # Update conversation project link if provided
                 db.execute(
                     text("UPDATE agent_conversations SET project_id = :pid WHERE id = :cid"),
                     {'pid': project_id, 'cid': conversation_id}
                 )
                 db.commit()
 
-            # Execute Agent Logic
-            # We wrap this to catch errors and log them
-            try:
-                response = await self._orchestrator.process_user_message(
-                    user_id=user_id,
-                    message=message,
-                    project_id=project_id
-                )
+            # 2. Stream Agent Execution
+            # Forward all events from agent to frontend
+            async for event in self._orchestrator.process_user_message_streaming(
+                user_id=user_id,
+                message=message,
+                project_id=project_id
+            ):
+                # Capture final message for database
+                if event["type"] == "message":
+                    final_answer = event["content"]
                 
-                final_answer = response.get('result', "I'm sorry, I couldn't process that request.")
-                steps_count = response.get('steps', 0)
-                
-                # 3. Save Assistant Message
+                # Forward event to frontend
+                yield event
+            
+            # 3. Save Assistant Message
+            if final_answer:
                 db.execute(
                     text("""
-                        INSERT INTO agent_messages (conversation_id, role, content, metadata)
-                        VALUES (:conv_id, 'assistant', :content, :meta)
+                        INSERT INTO agent_messages (conversation_id, role, content)
+                        VALUES (:conv_id, 'assistant', :content)
                     """),
                     {
                         'conv_id': conversation_id, 
-                        'content': final_answer,
-                        'meta': json.dumps({"steps": steps_count, "status": response.get('status')})
+                        'content': final_answer
                     }
                 )
                 db.commit()
+            
+            yield {"type": "message_end"}
                 
-                yield {"type": "message", "role": "assistant", "content": final_answer}
-                yield {"type": "message_end"}  # Signal completion to frontend
-                
-            except Exception as e:
-                logger.error(f"Agent execution failed: {e}")
-                yield {"type": "error", "content": f"An error occurred: {str(e)}"}
-                
+        except Exception as e:
+            logger.error(f"Agent execution failed: {e}")
+            yield {"type": "error", "content": f"An error occurred: {str(e)}"}
+            
         finally:
             db.close()

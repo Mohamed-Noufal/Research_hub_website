@@ -5,8 +5,10 @@ Provides semantic search, comparison, methodology extraction, etc.
 from typing import List, Dict, Optional, Any
 from app.core.rag_engine import RAGEngine
 from app.core.llm_client import LLMClient
+from app.core.cache import cached_tool
 import json
 
+@cached_tool(ttl=3600)
 async def semantic_search(
     query: str,
     project_id: Optional[int] = None,
@@ -40,6 +42,7 @@ async def semantic_search(
     
     return result.get('source_nodes', [])
 
+@cached_tool(ttl=3600)
 async def compare_papers(
     paper_ids: List[int],
     aspect: str = "methodology",
@@ -129,6 +132,7 @@ Format as JSON:
     
     return result
 
+@cached_tool(ttl=86400) # Cache strict extraction longer
 async def extract_methodology(
     paper_id: int,
     project_id: Optional[int] = None,
@@ -204,6 +208,7 @@ Format as JSON:
     
     return result
 
+@cached_tool(ttl=3600)
 async def find_research_gaps(
     project_id: int,
     rag_engine: RAGEngine = None,

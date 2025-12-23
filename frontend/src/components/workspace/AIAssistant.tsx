@@ -139,72 +139,127 @@ ${projectId ? 'I am currently focused on your selected project.' : 'How can I as
   }, [conversationId, userId]);
 
   const handleWsMessage = (data: any) => {
-    // data types: 'step', 'message', 'error'
-
     setMessages(prev => {
       const lastMsg = prev[prev.length - 1];
       const isAssistant = lastMsg?.role === 'assistant';
 
-      if (data.type === 'step') {
-        // It's a processing step update
-        if (isAssistant && lastMsg.id === data.parent_message_id) {
-          // Update existing message steps
-          let newSteps = lastMsg.steps ? [...lastMsg.steps] : [];
-          // Check if step exists
-          const stepIndex = newSteps.findIndex(s => s.id === data.step_id);
-          if (stepIndex >= 0) {
-            newSteps[stepIndex] = {
-              ...newSteps[stepIndex],
-              status: data.status,
-              detail: data.detail || newSteps[stepIndex].detail
-            };
-          } else {
-            newSteps.push({
-              id: data.step_id,
-              label: data.label || 'Processing...',
-              status: data.status,
-              tool: data.tool,
-              detail: data.detail
-            });
-          }
+      // Handle new streaming event types
+      if (data.type === 'thinking') {
+        // Agent is analyzing the request
+        if (isAssistant && lastMsg.content === '') {
+          const newSteps = lastMsg.steps || [];
+          newSteps.push({
+            id: `think-${data.step}`,
+            label: data.message || 'Analyzing your request...',
+            status: 'running',
+          });
+          return prev.map(m => m.id === lastMsg.id ? { ...m, steps: newSteps } : m);
+        }
+        return prev;
+      }
 
-          // Update tools used
-          let newTools = lastMsg.toolsUsed ? [...lastMsg.toolsUsed] : [];
-          if (data.tool && !newTools.includes(data.tool)) {
+      if (data.type === 'tool_selected') {
+        // Agent selected a tool
+        if (isAssistant) {
+          let newSteps = [...(lastMsg.steps || [])];
+          // Mark thinking as complete
+          newSteps = newSteps.map(s => s.status === 'running' ? { ...s, status: 'completed' } : s);
+          // Add tool selection step
+          newSteps.push({
+            id: `tool-${data.step}`,
+            label: `Using: ${data.tool}`,
+            status: 'running',
+            tool: data.tool,
+            detail: JSON.stringify(data.parameters, null, 2)
+          });
+
+          let newTools = lastMsg.toolsUsed || [];
+          if (!newTools.includes(data.tool)) {
             newTools.push(data.tool);
           }
 
           return prev.map(m => m.id === lastMsg.id ? { ...m, steps: newSteps, toolsUsed: newTools } : m);
-        } else {
-          // Should ideally match IDs, but for simplicity assuming sequential stream
-          return prev;
         }
-      } else if (data.type === 'message') {
-        // It's a content chunk or final message
-        if (isAssistant && lastMsg.id === data.message_id) {
-          return prev.map(m => m.id === lastMsg.id ? { ...m, content: m.content + (data.content || '') } : m);
-        } else {
-          // New assistant message starting (if we didn't create a placeholder, but we usually do)
-          // But actually the placeholder handles steps. If we get raw message content without placeholder:
-          return [...prev, {
-            id: data.message_id,
-            role: 'assistant',
-            content: data.content || '',
-            timestamp: new Date(),
-            steps: [],
-            agent: data.agent
-          }];
-        }
+        return prev;
+      }
 
-      } else if (data.type === 'message_end') {
+      if (data.type === 'tool_executing') {
+        // Tool is executing
+        if (isAssistant) {
+          const newSteps = (lastMsg.steps || []).map(s =>
+            s.tool === data.tool && s.status === 'running'
+              ? { ...s, label: `Executing: ${data.tool}...` }
+              : s
+          );
+          return prev.map(m => m.id === lastMsg.id ? { ...m, steps: newSteps } : m);
+        }
+        return prev;
+      }
+
+      if (data.type === 'tool_result') {
+        // Tool completed with result
+        if (isAssistant) {
+          const newSteps = (lastMsg.steps || []).map(s =>
+            s.tool === data.tool && s.status === 'running'
+              ? { ...s, status: 'completed', label: `✓ ${data.tool}`, detail: typeof data.result === 'string' ? data.result : JSON.stringify(data.result).substring(0, 100) }
+              : s
+          );
+          return prev.map(m => m.id === lastMsg.id ? { ...m, steps: newSteps } : m);
+        }
+        return prev;
+      }
+
+      if (data.type === 'tool_error') {
+        // Tool failed
+        if (isAssistant) {
+          const newSteps = (lastMsg.steps || []).map(s =>
+            s.tool === data.tool
+              ? { ...s, status: 'completed', label: `✗ ${data.tool} failed`, detail: data.error }
+              : s
+          );
+          return prev.map(m => m.id === lastMsg.id ? { ...m, steps: newSteps } : m);
+        }
+        return prev;
+      }
+
+      if (data.type === 'synthesizing') {
+        // Agent is generating final answer
+        if (isAssistant) {
+          let newSteps = [...(lastMsg.steps || [])];
+          newSteps = newSteps.map(s => s.status === 'running' ? { ...s, status: 'completed' } : s);
+          newSteps.push({
+            id: 'synthesize',
+            label: data.message || 'Generating final answer...',
+            status: 'running',
+          });
+          return prev.map(m => m.id === lastMsg.id ? { ...m, steps: newSteps } : m);
+        }
+        return prev;
+      }
+
+      if (data.type === 'message') {
+        // Final answer content
+        if (isAssistant) {
+          let newSteps = (lastMsg.steps || []).map(s => ({ ...s, status: 'completed' as const }));
+          return prev.map(m => m.id === lastMsg.id ? { ...m, content: data.content || '', steps: newSteps } : m);
+        }
+        return prev;
+      }
+
+      if (data.type === 'message_end') {
         setIsLoading(false);
         return prev;
-      } else if (data.type === 'error') {
+      }
+
+      if (data.type === 'error') {
         setIsLoading(false);
+        if (isAssistant) {
+          return prev.map(m => m.id === lastMsg.id ? { ...m, content: data.message || data.content, isError: true } : m);
+        }
         return [...prev, {
           id: Date.now().toString(),
           role: 'assistant',
-          content: `Error: ${data.error}`,
+          content: data.message || data.content || 'An error occurred',
           timestamp: new Date(),
           isError: true
         }];

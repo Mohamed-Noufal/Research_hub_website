@@ -20,8 +20,33 @@ services:
     networks:
       - paper-search
 
+  redis:
+    image: redis:alpine
+    container_name: redis-paper-search
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - paper-search
+
+  phoenix:
+    image: arizephoenix/phoenix:latest
+    container_name: phoenix-paper-search
+    ports:
+      - "6006:6006" # UI
+      - "4317:4317" # OTLP gRPC
+    environment:
+      - PHOENIX_PORT=6006
+      - PHOENIX_GRPC_PORT=4317
+    pull_policy: always
+    networks:
+      - paper-search
+
 volumes:
   postgres_data:
+  redis_data:
 
 networks:
   paper-search:
