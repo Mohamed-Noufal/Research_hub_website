@@ -37,6 +37,17 @@ class Paper(Base):
     date_added = Column(DateTime, default=datetime.datetime.utcnow)
     last_updated = Column(DateTime, default=datetime.datetime.utcnow)
     is_processed = Column(Boolean, default=False)  # For embedding processing
+    is_manual = Column(Boolean, default=False)  # Manually uploaded
+    user_id = Column(String, nullable=True)  # Owner if manual
+    
+    # File tracking (for RAG ingestion)
+    local_file_path = Column(String, nullable=True)  # Path to PDF file on disk
+    file_hash = Column(String(64), nullable=True)  # SHA256 hash for duplicate detection
+    
+    # Processing status (for background jobs)
+    processing_status = Column(String(20), default='pending')  # pending, processing, completed, failed
+    chunk_count = Column(Integer, default=0)  # Number of chunks created
+    error_message = Column(Text, nullable=True)  # Error details if failed
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
