@@ -1,14 +1,23 @@
+
 import { useState, useRef, useEffect } from 'react';
 import {
-  Send, Search, Database, RotateCcw,
-  Brain, CheckCircle2, Loader2, ChevronRight,
-  FileSearch, Network, BarChart, FileText, GitCompare,
-  BookOpen, Lightbulb, AlertCircle
+  Brain, CheckCircle2, Loader2,
+  Plus, ArrowRight
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
 import type { Paper } from '../../App';
 import ReconnectingWebSocket from 'reconnecting-websocket';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
+import { Badge } from "../ui/badge";
+import PaperPicker from './PaperPicker';
 
 interface AIAssistantProps {
   papers: Paper[];
@@ -42,14 +51,7 @@ export default function AIAssistant({ papers, projectId }: AIAssistantProps) {
     {
       id: 'welcome',
       role: 'assistant',
-      content: `Hello! I'm your AI research assistant. I can helping you with:
-
-• Summarizing papers in your library
-• Finding connections between research
-• Literature review assistance
-• Analyzing trends and identifying gaps
-
-${projectId ? 'I am currently focused on your selected project.' : 'How can I assist you today?'}`,
+      content: '', // Empty content for welcome state logic
       timestamp: new Date()
     }
   ]);
@@ -58,6 +60,17 @@ ${projectId ? 'I am currently focused on your selected project.' : 'How can I as
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(() => localStorage.getItem('paper-search-user-uuid-v1'));
 
+  const [scope, setScope] = useState<'project' | 'library' | 'selection'>('project');
+  const [selectedPaperIds, setSelectedPaperIds] = useState<string[]>([]);
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
+
+  // Auto-open picker when selection scope is chosen
+  const handleScopeChange = (val: 'project' | 'library' | 'selection') => {
+    setScope(val);
+    if (val === 'selection' && selectedPaperIds.length === 0) {
+      setIsPickerOpen(true);
+    }
+  };
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<ReconnectingWebSocket | null>(null);
@@ -93,9 +106,6 @@ ${projectId ? 'I am currently focused on your selected project.' : 'How can I as
       if (!userId) return; // Wait for user ID
 
       try {
-        // Here we could fetch existing history if we had a persistent conversation ID
-        // For now, we create a new one or use local storage to persist for session
-        // Only if we don't have one
         if (!conversationId) {
           const res = await fetch(`${API_BASE_URL}/agent/conversations`, {
             method: 'POST',
@@ -143,9 +153,7 @@ ${projectId ? 'I am currently focused on your selected project.' : 'How can I as
       const lastMsg = prev[prev.length - 1];
       const isAssistant = lastMsg?.role === 'assistant';
 
-      // Handle new streaming event types
       if (data.type === 'thinking') {
-        // Agent is analyzing the request
         if (isAssistant && lastMsg.content === '') {
           const newSteps = lastMsg.steps || [];
           newSteps.push({
@@ -159,12 +167,9 @@ ${projectId ? 'I am currently focused on your selected project.' : 'How can I as
       }
 
       if (data.type === 'tool_selected') {
-        // Agent selected a tool
         if (isAssistant) {
           let newSteps = [...(lastMsg.steps || [])];
-          // Mark thinking as complete
           newSteps = newSteps.map(s => s.status === 'running' ? { ...s, status: 'completed' } : s);
-          // Add tool selection step
           newSteps.push({
             id: `tool-${data.step}`,
             label: `Using: ${data.tool}`,
@@ -183,8 +188,8 @@ ${projectId ? 'I am currently focused on your selected project.' : 'How can I as
         return prev;
       }
 
+      // ... other message types ...
       if (data.type === 'tool_executing') {
-        // Tool is executing
         if (isAssistant) {
           const newSteps = (lastMsg.steps || []).map(s =>
             s.tool === data.tool && s.status === 'running'
@@ -197,11 +202,10 @@ ${projectId ? 'I am currently focused on your selected project.' : 'How can I as
       }
 
       if (data.type === 'tool_result') {
-        // Tool completed with result
         if (isAssistant) {
           const newSteps = (lastMsg.steps || []).map(s =>
             s.tool === data.tool && s.status === 'running'
-              ? { ...s, status: 'completed', label: `✓ ${data.tool}`, detail: typeof data.result === 'string' ? data.result : JSON.stringify(data.result).substring(0, 100) }
+              ? { ...s, status: 'completed' as const, label: `✓ ${data.tool}`, detail: typeof data.result === 'string' ? data.result : JSON.stringify(data.result).substring(0, 100) }
               : s
           );
           return prev.map(m => m.id === lastMsg.id ? { ...m, steps: newSteps } : m);
@@ -210,11 +214,10 @@ ${projectId ? 'I am currently focused on your selected project.' : 'How can I as
       }
 
       if (data.type === 'tool_error') {
-        // Tool failed
         if (isAssistant) {
           const newSteps = (lastMsg.steps || []).map(s =>
             s.tool === data.tool
-              ? { ...s, status: 'completed', label: `✗ ${data.tool} failed`, detail: data.error }
+              ? { ...s, status: 'completed' as const, label: `✗ ${data.tool} failed`, detail: data.error }
               : s
           );
           return prev.map(m => m.id === lastMsg.id ? { ...m, steps: newSteps } : m);
@@ -223,7 +226,6 @@ ${projectId ? 'I am currently focused on your selected project.' : 'How can I as
       }
 
       if (data.type === 'synthesizing') {
-        // Agent is generating final answer
         if (isAssistant) {
           let newSteps = [...(lastMsg.steps || [])];
           newSteps = newSteps.map(s => s.status === 'running' ? { ...s, status: 'completed' } : s);
@@ -238,7 +240,6 @@ ${projectId ? 'I am currently focused on your selected project.' : 'How can I as
       }
 
       if (data.type === 'message') {
-        // Final answer content
         if (isAssistant) {
           let newSteps = (lastMsg.steps || []).map(s => ({ ...s, status: 'completed' as const }));
           return prev.map(m => m.id === lastMsg.id ? { ...m, content: data.content || '', steps: newSteps } : m);
@@ -281,7 +282,6 @@ ${projectId ? 'I am currently focused on your selected project.' : 'How can I as
 
     setMessages(prev => [...prev, userMessage]);
 
-    // Create placeholder for assistant response
     const assistantMsgId = (Date.now() + 1).toString();
     const assistantPlaceholder: Message = {
       id: assistantMsgId,
@@ -295,151 +295,117 @@ ${projectId ? 'I am currently focused on your selected project.' : 'How can I as
     setInput('');
     setIsLoading(true);
 
-    // Send payload
     wsRef.current.send(JSON.stringify({
       message: input,
       project_id: projectId ? Number(projectId) : null,
-      user_id: userId
-      // parent_message_id could be added for internal tracking
+      user_id: userId,
+      scope: scope,
+      selected_paper_ids: scope === 'selection' ? selectedPaperIds : []
     }));
   };
 
-  const getToolIcon = (tool: string) => {
-    if (tool?.includes('Parser')) return Search;
-    if (tool?.includes('Database')) return Database;
-    if (tool?.includes('Analysis')) return BarChart;
-    if (tool?.includes('Language Model')) return Brain;
-    if (tool?.includes('Classification')) return Network;
-    return FileSearch;
-  };
-
-  const quickActions = [
-    { icon: FileText, label: 'Summarize library', action: 'Summarize all papers in my library' },
-    { icon: GitCompare, label: 'Compare papers', action: 'Compare the methodologies in my saved papers' },
-    { icon: BookOpen, label: 'Literature review', action: 'Help me structure a literature review' },
-    { icon: Lightbulb, label: 'Research gaps', action: 'What research gaps can you identify?' },
-  ];
+  const hasStartedConversation = messages.length > 1;
 
   return (
-    <div className="h-full flex flex-col bg-white">
-      {/* Messages - Full Width */}
-      <div className="flex-1 overflow-y-auto px-4 py-6 space-y-6">
-        {messages.map((message, index) => (
-          <div key={message.id} className="space-y-4">
-            {/* User Message */}
-            {message.role === 'user' && (
-              <div className="flex items-start gap-3">
-                <div className="flex-1">
-                  <div className="bg-gray-100 rounded-lg px-4 py-3 max-w-2xl">
-                    <p className="text-gray-900 whitespace-pre-wrap">{message.content}</p>
+    <div className="h-full relative flex flex-col bg-white">
+      {/* Paper Picker Modal */}
+      <PaperPicker
+        papers={papers}
+        selectedIds={selectedPaperIds}
+        onSelectionChange={setSelectedPaperIds}
+        open={isPickerOpen}
+        onOpenChange={setIsPickerOpen}
+        limit={7}
+      />
+
+      {/* Messages / Welcome State */}
+      <div className={`flex-1 overflow-y-auto px-4 py-6 space-y-6 pb-32 ${!hasStartedConversation ? 'flex flex-col justify-center items-center' : ''}`}>
+
+        {!hasStartedConversation ? (
+          <div className="text-center space-y-4 max-w-lg mx-auto mb-20">
+            <div className="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
+              <Brain className="w-6 h-6 text-gray-900" />
+            </div>
+            <h2 className="text-2xl font-semibold text-gray-900">How can I help you?</h2>
+          </div>
+        ) : (
+          messages.filter(m => m.content || m.steps?.length || m.role === 'user').map((message, index) => (
+            <div key={message.id} className="w-full max-w-3xl mx-auto space-y-4">
+              {/* User Message */}
+              {message.role === 'user' && (
+                <div className="flex justify-end">
+                  <div className="bg-gray-100 text-gray-900 rounded-2xl px-5 py-3 max-w-[85%]">
+                    <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
                   </div>
                 </div>
-                <button className="p-1.5 text-gray-400 hover:text-gray-600" title="Undo">
-                  <RotateCcw className="w-4 h-4" />
-                </button>
-              </div>
-            )}
+              )}
 
-            {/* Assistant Message */}
-            {message.role === 'assistant' && (
-              <div className="space-y-3">
-                {/* Agent Badge */}
-                {(message.agent || (message.steps && message.steps.length > 0)) && index > 0 && (
-                  <div className="flex items-center gap-2">
-                    <div className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-gray-100 rounded text-xs text-gray-600">
-                      <CheckCircle2 className="w-3 h-3" />
-                      <span>{message.agent || 'AI Agent'}</span>
-                    </div>
+              {/* Assistant Message */}
+              {message.role === 'assistant' && (
+                <div className="flex gap-4">
+                  <div className="w-8 h-8 rounded-full bg-white border border-gray-200 flex items-center justify-center shrink-0 mt-1 shadow-sm">
+                    <Brain className="w-4 h-4 text-gray-700" />
                   </div>
-                )}
-
-                {/* Processing Steps */}
-                {message.steps && message.steps.length > 0 && (
-                  <div className="space-y-2 border-l-2 border-gray-100 pl-3">
-                    {message.steps.map((step) => (
-                      <div
-                        key={step.id}
-                        className="flex items-start gap-2.5"
-                      >
-                        <div className="mt-0.5">
-                          {step.status === 'completed' && <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
-                          {step.status === 'running' && <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />}
-                          {step.status === 'pending' && <div className="w-4 h-4 rounded-full border-2 border-gray-300" />}
+                  <div className="flex-1 space-y-4 min-w-0">
+                    {/* Steps / Thinking */}
+                    {message.steps && message.steps.length > 0 && (
+                      <div className="bg-gray-50 rounded-xl border border-gray-100 p-3 space-y-2">
+                        <div className="flex items-center gap-2 text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">
+                          <Loader2 className="w-3 h-3 animate-spin" /> Processing
                         </div>
-
-                        <div className="flex-1">
-                          <div className={`text-sm ${step.status === 'completed' ? 'text-gray-900' : step.status === 'running' ? 'text-gray-900' : 'text-gray-400'}`}>
-                            {step.label}
-                          </div>
-                          {step.tool && step.status !== 'pending' && (
-                            <div className="flex items-center gap-2 mt-1">
-                              <div className="inline-flex items-center gap-1 text-xs text-gray-500">
-                                {/* Icon logic simplified */}
-                                <Database className="w-3 h-3" />
-                                <span>{step.tool}</span>
-                              </div>
-                              {step.detail && (
-                                <>
-                                  <ChevronRight className="w-3 h-3 text-gray-400" />
-                                  <span className="text-xs text-gray-400">{step.detail}</span>
-                                </>
+                        {message.steps.map(step => (
+                          <div key={step.id} className="flex items-start gap-3 text-sm">
+                            <div className="mt-1">
+                              {step.status === 'completed' ? (
+                                <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
+                              ) : (
+                                <div className="w-3.5 h-3.5 rounded-full border-2 border-gray-300 border-t-blue-600 animate-spin" />
                               )}
                             </div>
-                          )}
-                        </div>
+                            <div className="flex-1">
+                              <span className={`text-gray-700 ${step.status === 'running' ? 'font-medium' : ''}`}>
+                                {step.label}
+                              </span>
+                              {step.detail && (
+                                <div className="text-xs text-gray-500 mt-0.5 font-mono bg-white p-1 rounded border border-gray-100 truncate max-w-[300px]">
+                                  {step.detail}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                )}
+                    )}
 
-                {/* Message Content */}
-                {message.content && (
-                  <div className={`text-gray-900 space-y-3 leading-relaxed ${message.isError ? 'text-red-600' : ''}`}>
-                    {message.content.split('\n').map((line, i) => {
-                      if (line.startsWith('**') && line.endsWith('**')) {
-                        return <div key={i} className="font-semibold mt-4 first:mt-0">{line.replace(/\*\*/g, '')}</div>;
-                      }
-                      if (line.startsWith('• ')) {
-                        return <div key={i} className="flex gap-2"><span className="text-gray-400">•</span><span className="flex-1">{line.replace('• ', '')}</span></div>;
-                      }
-                      return line.trim() ? <p key={i}>{line}</p> : <br key={i} />;
-                    })}
+                    {/* Content */}
+                    {message.content && (
+                      <div className={`prose prose-sm max-w-none text-gray-800 leading-7 ${message.isError ? 'text-red-600' : ''}`}>
+                        {message.content.split('\n').map((line, i) => (
+                          <p key={i} className="mb-2 last:mb-0">{line}</p>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
-
-        {isLoading && messages[messages.length - 1]?.role !== 'assistant' && (
-          <div className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin text-gray-400" /></div>
+                </div>
+              )}
+            </div>
+          ))
         )}
 
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Quick Actions (only if empty history) */}
-      {messages.length <= 1 && (
-        <div className="px-4 pb-4">
-          <div className="grid grid-cols-2 gap-2">
-            {quickActions.map((action, index) => (
-              <button
-                key={index}
-                onClick={() => setInput(action.action)}
-                className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-lg text-sm transition-colors text-left border border-gray-200"
-              >
-                <action.icon className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                <span className="flex-1">{action.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Floating Input Bar - Dynamic Positioning */}
+      <div className={`
+        absolute left-0 right-0 px-4 transition-all duration-500 ease-in-out z-20
+        ${hasStartedConversation
+          ? 'bottom-4'
+          : 'top-[60%] -translate-y-1/2'}
+      `}>
+        <div className="w-full max-w-3xl mx-auto">
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-3 flex flex-col gap-2 transition-all duration-200 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] focus-within:shadow-[0_8px_30px_rgb(0,0,0,0.12)] focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500/50">
 
-      {/* Input */}
-      <div className="px-4 pb-4">
-        <div className="flex items-end gap-2">
-          <div className="flex-1 bg-gray-50 rounded-lg border border-gray-200 focus-within:border-gray-300 focus-within:bg-white transition-colors">
+            {/* Text Area */}
             <Textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -449,17 +415,93 @@ ${projectId ? 'I am currently focused on your selected project.' : 'How can I as
                   handleSend();
                 }
               }}
-              placeholder="Ask anything (Ctrl+L)..."
-              className="resize-none min-h-[52px] bg-transparent border-0 text-gray-900 placeholder:text-gray-400 focus-visible:ring-0 focus-visible:ring-offset-0"
+              placeholder={hasStartedConversation ? "Message..." : "Ask anything (Ctrl+L)..."}
+              className="min-h-[44px] max-h-[300px] border-0 focus-visible:ring-0 resize-none bg-transparent p-0 text-base placeholder:text-gray-400"
+              style={{ height: input ? 'auto' : '44px' }}
             />
+
+            {/* Bottom Controls Row */}
+            <div className="flex items-center justify-between">
+
+              {/* Left: Context Menu (+) */}
+              <div className="flex items-center gap-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-gray-900 rounded-lg -ml-1">
+                      <Plus className="w-5 h-5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-60 p-2 bg-white border border-gray-200 shadow-lg rounded-xl">
+                    <DropdownMenuLabel className="text-xs font-semibold text-gray-400 mb-1 uppercase tracking-wider px-3 py-2">
+                      Context Source
+                    </DropdownMenuLabel>
+
+                    <DropdownMenuItem
+                      className="flex items-center justify-between cursor-pointer rounded-lg px-3 py-2.5 font-medium text-gray-700 data-[highlighted]:bg-gray-50 focus:text-gray-900 data-[state=checked]:bg-blue-50"
+                      onClick={() => handleScopeChange('project')}
+                    >
+                      <span className={`text-sm ${scope === 'project' ? 'font-semibold text-gray-900' : 'font-medium text-gray-700'}`}>Current Project</span>
+                      {scope === 'project' && <CheckCircle2 className="w-4 h-4 text-blue-600" />}
+                    </DropdownMenuItem>
+
+                    <DropdownMenuItem
+                      className="flex items-center justify-between cursor-pointer rounded-lg px-3 py-2.5 font-medium text-gray-700 data-[highlighted]:bg-gray-50 focus:text-gray-900"
+                      onClick={() => handleScopeChange('library')}
+                    >
+                      <span className={`text-sm ${scope === 'library' ? 'font-semibold text-gray-900' : 'font-medium text-gray-700'}`}>Entire Library</span>
+                      {scope === 'library' && <CheckCircle2 className="w-4 h-4 text-blue-600" />}
+                    </DropdownMenuItem>
+
+                    <DropdownMenuSeparator className="my-1 bg-gray-100" />
+
+                    <DropdownMenuItem
+                      className="flex items-center justify-between cursor-pointer rounded-lg px-3 py-2.5 font-medium text-gray-700 data-[highlighted]:bg-gray-50 focus:text-gray-900"
+                      onClick={() => handleScopeChange('selection')}
+                    >
+                      <div className="flex flex-col">
+                        <span className={`text-sm ${scope === 'selection' ? 'font-semibold text-gray-900' : 'font-medium text-gray-700'}`}>Selected Papers</span>
+                        {selectedPaperIds.length > 0 && (
+                          <span className="text-xs text-gray-400 font-normal mt-0.5">{selectedPaperIds.length} papers active</span>
+                        )}
+                      </div>
+                      {scope === 'selection' && <CheckCircle2 className="w-4 h-4 text-blue-600" />}
+                    </DropdownMenuItem>
+
+                    {scope === 'selection' && (
+                      <div className="px-1 pt-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full h-8 text-xs font-medium border-gray-200 hover:bg-gray-50 hover:text-gray-900"
+                          onClick={() => setIsPickerOpen(true)}
+                        >
+                          Edit Selection
+                        </Button>
+                      </div>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                {/* Context Badge (visible when scope is custom) */}
+                {scope === 'selection' && selectedPaperIds.length > 0 && (
+                  <Badge variant="secondary" className="bg-gray-100 text-gray-500 font-normal border-0 hover:bg-gray-200 transition-colors cursor-pointer" onClick={() => setIsPickerOpen(true)}>
+                    {selectedPaperIds.length} papers
+                  </Badge>
+                )}
+              </div>
+
+              {/* Right: Send Button */}
+              <Button
+                onClick={handleSend}
+                disabled={!input.trim() || isLoading}
+                size="icon"
+                className={`h-8 w-8 shrink-0 rounded-lg transition-all ${input.trim() ? 'bg-gray-900 text-white hover:bg-gray-800' : 'bg-gray-100 text-gray-300 hover:bg-gray-100'
+                  }`}
+              >
+                <ArrowRight className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
-          <Button
-            onClick={handleSend}
-            disabled={!input.trim() || isLoading}
-            className="h-[52px] w-[52px] p-0 bg-gray-900 hover:bg-gray-800 text-white rounded-lg disabled:opacity-50"
-          >
-            <Send className="w-4 h-4" />
-          </Button>
         </div>
       </div>
     </div>

@@ -103,7 +103,9 @@ class AgentService:
         user_id: str,
         conversation_id: str,
         message: str,
-        project_id: Optional[int] = None
+        project_id: Optional[int] = None,
+        scope: Optional[str] = 'project',
+        selected_paper_ids: Optional[List[int]] = None
     ) -> AsyncGenerator[Dict, None]:
         """
         Process a user message and stream updates/response
@@ -140,7 +142,9 @@ class AgentService:
             async for event in self._orchestrator.process_user_message_streaming(
                 user_id=user_id,
                 message=message,
-                project_id=project_id
+                project_id=project_id,
+                scope=scope,
+                selected_paper_ids=selected_paper_ids
             ):
                 # Capture final message for database
                 if event["type"] == "message":

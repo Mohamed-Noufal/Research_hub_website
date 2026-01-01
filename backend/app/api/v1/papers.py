@@ -12,6 +12,7 @@ from app.services.enhanced_vector_service import EnhancedVectorService
 from app.services.ai_query_analyzer import AIQueryAnalyzer
 from app.utils.cache import CacheService
 from app.core.config import settings
+from app.tools.pdf_tools import parse_pdf_background
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -996,6 +997,7 @@ from app.api.v1.users import get_current_user_id
 async def upload_pdf(
     paper_id: int,
     file: UploadFile = File(...),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db)
 ):
     """
@@ -1043,6 +1045,14 @@ async def upload_pdf(
     
     db.commit()
     db.refresh(paper)
+    
+    # TRIGGER AUTO-INDEXING
+    background_tasks.add_task(
+        parse_pdf_background, 
+        pdf_path=str(file_path.absolute()), 
+        paper_id=paper_id,
+        project_id=0 
+    )
     
     # Return full paper object for frontend to update state
     from app.models.paper import Paper as PaperModel
@@ -1169,6 +1179,7 @@ async def create_manual_paper(
     venue: Optional[str] = Form(None),
     folder_id: Optional[int] = Form(None),
     pdf_file: Optional[UploadFile] = File(None),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db),
     user_id: int = Depends(get_current_user_id)
 ):
@@ -1270,6 +1281,15 @@ async def create_manual_paper(
                 )
                 db.commit()
                 logger.info(f"Added paper {paper_id} to folder {folder_id}")
+
+        # Trigger Auto-Indexing if PDF exists
+        if pdf_url and 'file_path' in locals():
+             background_tasks.add_task(
+                parse_pdf_background,
+                pdf_path=str(file_path.absolute()),
+                paper_id=paper_id,
+                project_id=0
+            )
 
         
         return {

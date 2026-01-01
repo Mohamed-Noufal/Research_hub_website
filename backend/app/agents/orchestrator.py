@@ -99,7 +99,11 @@ class OrchestratorAgent:
                         "top_k": "int (default 10)"
                     },
                     function=lambda **kwargs: rag_tools.semantic_search(
-                        **kwargs,
+                        query=kwargs.get('query'),
+                        project_id=kwargs.get('project_id'),
+                        top_k=kwargs.get('top_k', 10),
+                        scope=self.agent.context.get('scope', 'project') if self.agent.context else 'project',
+                        selected_paper_ids=self.agent.context.get('selected_paper_ids') if self.agent.context else None,
                         rag_engine=self.rag
                     )
                 ),
@@ -125,6 +129,22 @@ class OrchestratorAgent:
                         **kwargs,
                         rag_engine=self.rag,
                         llm_client=self.llm
+                    )
+                ),
+                Tool(
+                    name="get_paper_sections",
+                    description="Retrieve full text of specific sections (e.g., 'Methodology', 'Results', 'Discussion') from papers. Use this for precise summaries and comparisons without noise.",
+                    parameters={
+                        "section_types": "list of str",
+                        "paper_ids": "list of int (optional)"
+                    },
+                    function=lambda **kwargs: rag_tools.get_paper_sections(
+                        section_types=kwargs.get('section_types'),
+                        paper_ids=kwargs.get('paper_ids'),
+                        project_id=self.agent.context.get('project_id') if self.agent.context else None,
+                        scope=self.agent.context.get('scope', 'project') if self.agent.context else 'project',
+                        selected_paper_ids=self.agent.context.get('selected_paper_ids') if self.agent.context else None,
+                        rag_engine=self.rag
                     )
                 ),
             ])

@@ -14,6 +14,8 @@ async def semantic_search(
     project_id: Optional[int] = None,
     section_filter: Optional[List[str]] = None,
     top_k: int = 10,
+    scope: str = 'project',
+    selected_paper_ids: Optional[List[int]] = None,
     rag_engine: RAGEngine = None
 ) -> List[Dict]:
     """
@@ -24,6 +26,8 @@ async def semantic_search(
         project_id: Filter by project_id
         section_filter: Filter by section types
         top_k: Number of results
+        scope: Search scope ('project', 'library', 'selection')
+        selected_paper_ids: List of paper IDs if scope is 'selection'
         rag_engine: RAG engine instance
     
     Returns:
@@ -32,15 +36,80 @@ async def semantic_search(
     if not rag_engine:
         rag_engine = RAGEngine()
     
+    # Determine filters based on scope
+    final_project_id = project_id
+    final_paper_ids = None
+    
+    if scope == 'library':
+        final_project_id = None # Search everything
+    elif scope == 'selection':
+        final_paper_ids = selected_paper_ids
+        final_project_id = None # Search specifically these papers, ignore project boundary
+    
     result = await rag_engine.query(
         query_text=query,
-        project_id=project_id,
+        project_id=final_project_id,
+        paper_ids=final_paper_ids,
         section_filter=section_filter,
         top_k=top_k,
         return_sources=True
     )
     
+    
     return result.get('source_nodes', [])
+
+@cached_tool(ttl=3600)
+async def get_paper_sections(
+    section_types: List[str],
+    paper_ids: Optional[List[int]] = None,
+    project_id: Optional[int] = None,
+    scope: str = 'project',
+    selected_paper_ids: Optional[List[int]] = None,
+    rag_engine: RAGEngine = None
+) -> List[Dict]:
+    """
+    Retrieves full text of specific sections (Methodology, Results, etc.) 
+    from a list of papers. Use this for structured summaries and comparisons.
+    """
+    if not rag_engine:
+        rag_engine = RAGEngine()
+        
+    # Determine filters based on scope
+    final_project_id = project_id
+    final_paper_ids = paper_ids
+    
+    # Priority: arguments > scope context
+    if not final_paper_ids and scope == 'selection':
+        final_paper_ids = selected_paper_ids
+    
+    if scope == 'library':
+        final_project_id = None
+    elif scope == 'selection':
+        final_project_id = None
+        
+    # Use retrieve_only with section filter but higher top_k to get comprehensive content
+    # Note: Ideally this would be a SQL query, but we use retrieve_only with filters for now
+    # to leverage the existing engine logic. 
+    # To strictly follow plan "SELECT text FROM... WHERE section_type=...", 
+    # we can use the engine's query with a 'match all' query text or specialized method.
+    
+    # Combine section types for query text to help vector search focus
+    query_text = " ".join(section_types)
+    
+    # Using a specialized query or high-k retrieval
+    result = await rag_engine.retrieve_only(
+        query_text=query_text, 
+        project_id=final_project_id,
+        paper_ids=final_paper_ids,
+        section_filter=section_types, # Explicit filter logic handles lists with IN operator
+        top_k=50 # Retrieve enough chunks
+    )
+    
+    # Post-filter strictly by section_type metadata to ensure purity
+    # (The vector search might return 'related' sections, we want exact checks if possible,
+    # but the engine filter uses 'ExactMatchFilter' so it should be strict already if we pass it)
+    
+    return result
 
 @cached_tool(ttl=3600)
 async def compare_papers(

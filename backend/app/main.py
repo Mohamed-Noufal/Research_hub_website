@@ -145,6 +145,13 @@ app.include_router(
     tags=["agent"]
 )
 
+from .api.v1 import knowledge_base
+app.include_router(
+    knowledge_base.router,
+    prefix=settings.API_V1_PREFIX,
+    tags=["knowledge-base"]
+)
+
 
 
 

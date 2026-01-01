@@ -115,6 +115,8 @@ async def websocket_endpoint(
             message_data = json.loads(data)
             message_text = message_data.get('message')
             project_id = message_data.get('project_id')
+            scope = message_data.get('scope', 'project')
+            selected_paper_ids = message_data.get('selected_paper_ids', [])
             
             if not message_text:
                 continue
@@ -124,7 +126,9 @@ async def websocket_endpoint(
                 user_id=user_id,
                 conversation_id=conversation_id,
                 message=message_text,
-                project_id=project_id
+                project_id=project_id,
+                scope=scope,
+                selected_paper_ids=selected_paper_ids
             ):
                 await websocket.send_json(update)
                 
