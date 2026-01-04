@@ -21,7 +21,16 @@ class EnhancedVectorService:
     def __init__(self, model_name: str = 'nomic-ai/nomic-embed-text-v1.5'):
         """Initialize with specified embedding model"""
         self.model_name = model_name
-        self.model = SentenceTransformer(model_name, trust_remote_code=True)
+        
+        # ✅ Use cached model instead of loading new instance
+        from app.core.model_cache import ModelCache
+        try:
+            self.model = ModelCache.get_model()
+        except RuntimeError:
+            # Fallback: load model if cache not initialized (shouldn't happen in production)
+            print("⚠️  Model cache not initialized, loading model directly")
+            self.model = SentenceTransformer(model_name, trust_remote_code=True)
+        
         self.embedding_dim = self.model.get_sentence_embedding_dimension()
 
         # Cache settings

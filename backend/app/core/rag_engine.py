@@ -186,13 +186,30 @@ class RAGEngine:
         paper_ids: list = None,
         user_id: str = None,
         top_k: int = 10,
-        return_sources: bool = True
+        return_sources: bool = True,
+        use_cache: bool = True
     ) -> dict:
         """
         Query using Hybrid Search (Vector + BM25)
         Filters by user_id, project_id, or paper_ids for accurate scoping
+        Caches results in Redis for 30 minutes
         """
         logger.info(f"Query (Hybrid): '{query_text}' user={user_id} project={project_id}")
+        
+        # Try cache first
+        if use_cache:
+            try:
+                from app.core.cache import cache_service
+                cached = cache_service.cache_rag_query(
+                    query=query_text,
+                    user_id=user_id or "",
+                    paper_ids=sorted(paper_ids) if paper_ids else None
+                )
+                if cached:
+                    logger.info("  📦 Cache HIT - returning cached result")
+                    return cached
+            except Exception as e:
+                logger.debug(f"Cache check failed: {e}")
         
         # Build vector filters
         filters = []
@@ -230,7 +247,8 @@ class RAGEngine:
         
         result = {
             'answer': str(response),
-            'source_nodes': []
+            'source_nodes': [],
+            'cached': False
         }
         
         if return_sources and hasattr(response, 'source_nodes'):
@@ -244,6 +262,20 @@ class RAGEngine:
                 }
                 for node in response.source_nodes
             ]
+        
+        # Cache the result
+        if use_cache:
+            try:
+                from app.core.cache import cache_service
+                cache_service.set_rag_query(
+                    query=query_text,
+                    user_id=user_id or "",
+                    result=result,
+                    paper_ids=sorted(paper_ids) if paper_ids else None
+                )
+                logger.info("  📦 Result cached for 30 min")
+            except Exception as e:
+                logger.debug(f"Cache store failed: {e}")
         
         return result
 
@@ -382,8 +414,7 @@ class RAGEngine:
             [vector_retriever, bm25_retriever],
             similarity_top_k=similarity_top_k,
             num_queries=1,
-            use_async=True,
-            fusion_mode="reciprocal_rank"
+            use_async=True
         )
 
     

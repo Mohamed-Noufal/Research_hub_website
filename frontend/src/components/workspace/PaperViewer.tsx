@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   ExternalLink, FileText,
   ChevronLeft, Eye, Network, Highlighter, MessageSquare,
@@ -22,6 +22,8 @@ export default function PaperViewer({ paper, onPdfUpload }: PaperViewerProps) {
   const [activeTab, setActiveTab] = useState<TabType>('abstract');
   const [localPdfUrl, setLocalPdfUrl] = useState<string | undefined>(undefined);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Use local URL if available, otherwise paper.pdfUrl
   const displayPdfUrl = localPdfUrl || paper?.pdfUrl;
@@ -63,6 +65,50 @@ export default function PaperViewer({ paper, onPdfUpload }: PaperViewerProps) {
       toast.error('Failed to download PDF. The link may be broken or restricted.', { id: toastId });
     } finally {
       setIsDownloading(false);
+    }
+  };
+
+  const handleUploadPdf = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!paper || !event.target.files || event.target.files.length === 0) return;
+
+    const file = event.target.files[0];
+
+    // Validate file type
+    if (file.type !== 'application/pdf') {
+      toast.error('Please upload a PDF file');
+      return;
+    }
+
+    // Validate file size (max 50MB)
+    const maxSize = 50 * 1024 * 1024;
+    if (file.size > maxSize) {
+      toast.error('File too large. Maximum size is 50MB');
+      return;
+    }
+
+    setIsUploading(true);
+    const toastId = toast.loading(`Uploading ${file.name}...`);
+
+    try {
+      const { apiService } = await import('../../services/api');
+      const response = await apiService.uploadPaperPdf(paper.id, file);
+
+      setLocalPdfUrl(response.pdf_url);
+      toast.success('PDF uploaded successfully!', { id: toastId });
+
+      // Refresh library
+      if (onPdfUpload) {
+        onPdfUpload();
+      }
+    } catch (error) {
+      console.error('Upload failed:', error);
+      toast.error('Failed to upload PDF', { id: toastId });
+    } finally {
+      setIsUploading(false);
+      // Reset input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -335,13 +381,22 @@ export default function PaperViewer({ paper, onPdfUpload }: PaperViewerProps) {
                       </Badge>
                     </div>
                     <div className="flex gap-2">
+                      {/* Hidden file input */}
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".pdf,application/pdf"
+                        style={{ display: 'none' }}
+                        onChange={handleUploadPdf}
+                      />
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={onPdfUpload}
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUploading}
                       >
                         <Upload className="w-4 h-4 mr-2" />
-                        Upload PDF
+                        {isUploading ? 'Uploading...' : 'Upload PDF'}
                       </Button>
                       <Button
                         size="sm"
@@ -426,13 +481,21 @@ export default function PaperViewer({ paper, onPdfUpload }: PaperViewerProps) {
                       We couldn't find a direct PDF link for this paper.
                     </p>
                     <div className="flex gap-2 justify-center">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".pdf,application/pdf"
+                        style={{ display: 'none' }}
+                        onChange={handleUploadPdf}
+                      />
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={onPdfUpload}
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUploading}
                       >
                         <Upload className="w-4 h-4 mr-2" />
-                        Upload PDF
+                        {isUploading ? 'Uploading...' : 'Upload PDF'}
                       </Button>
                       {paper.doi && (
                         <Button

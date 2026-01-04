@@ -14,6 +14,18 @@ from app.utils.cache import CacheService
 from app.core.config import settings
 from app.tools.pdf_tools import parse_pdf_background
 
+# Pydantic models for request validation
+class CreateManualPaperRequest(BaseModel):
+    """Request model for manually creating a paper"""
+    title: str = Field(..., min_length=1, max_length=1000)
+    authors: List[str] = Field(..., min_items=1)
+    abstract: Optional[str] = None
+    year: Optional[int] = None
+    venue: Optional[str] = None
+    category: str = "ai_cs"
+    doi: Optional[str] = None
+    pdf_url: Optional[str] = None
+
 # Configure logging
 logger = logging.getLogger(__name__)
 
@@ -228,10 +240,86 @@ async def unified_search(
         return result
 
     except Exception as e:
-        logger.exception(f"Search failed: {e}")
+        logger.error(f"Search failed: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=500,
             detail=f"Search failed: {str(e)}"
+        )
+
+@router.post("/create-manual")
+async def create_manual_paper(
+    request: CreateManualPaperRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """
+    Create a paper manually (saves to GLOBAL papers table)
+    Makes the paper searchable by everyone!
+    """
+    try:
+        from app.models.paper import Paper
+        from app.services.user_service import UserService
+        import asyncio
+        
+        # 1. Create paper in GLOBAL table
+        new_paper = Paper(
+            title=request.title,
+            authors=request.authors,
+            abstract=request.abstract or "",
+            year=request.year,
+            venue=request.venue,
+            category=request.category,
+            doi=request.doi,
+            pdf_url=request.pdf_url,
+            source="manual_upload",
+            citation_count=0
+        )
+        
+        db.add(new_paper)
+        db.commit()
+        db.refresh(new_paper)
+        
+        print(f"✅ Created paper in GLOBAL table: ID {new_paper.id}, Title: {new_paper.title}")
+        
+        # 2. Add to user's library
+        user_service = UserService()
+        user_id = "550e8400-e29b-41d4-a716-446655440000"  # Current test user
+        
+        user_service.save_paper(
+            db=db,
+            user_id=user_id,
+            paper_id=new_paper.id
+        )
+        
+        print(f"✅ Added paper to user's library")
+        
+        # 3. Generate embedding in background
+        vector_service = get_vector_service()
+        asyncio.create_task(
+            vector_service.generate_embeddings_for_papers(
+                db=db,
+                batch_size=1,
+                max_papers=1,
+                force_regenerate=False
+            )
+        )
+        
+        print(f"✅ Queued embedding generation for paper ID {new_paper.id}")
+        
+        return {
+            "status": "success",
+            "paper_id": new_paper.id,
+            "message": "Paper created in global database and added to your library. Now searchable!"
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to create manual paper: {e}")
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create paper: {str(e)}"
         )
 
 
@@ -1137,16 +1225,19 @@ async def download_pdf(
         logger.error(f"Unexpected error downloading PDF: {e}")
         raise HTTPException(status_code=500, detail=f"Error downloading PDF: {str(e)}")
     
-    # Update paper PDF URL to local
-    local_url = f"http://localhost:8000/uploads/pdfs/{filename}"
-    paper.pdf_url = local_url
+    # Update paper PDF URL to local (use relative path for Vite proxy)
+    # Frontend Vite proxy maps /uploads -> http://localhost:8000/uploads
+    relative_url = f"/uploads/pdfs/{filename}"
+    full_url = f"http://localhost:8000/uploads/pdfs/{filename}"
+    paper.pdf_url = relative_url  # Store relative for frontend proxy
     
     db.commit()
     db.refresh(paper)
     
     return {
         "message": "PDF downloaded and saved successfully",
-        "pdf_url": local_url,
+        "pdf_url": relative_url,  # Use relative path for iframe (Vite proxy)
+        "pdf_url_full": full_url,  # Full URL for direct browser access
         "paper_id": paper_id,
         "file_size": file_path.stat().st_size,
         "paper": {
@@ -1173,6 +1264,7 @@ from pathlib import Path
 async def create_manual_paper(
     title: str = Form(...),
     authors: str = Form(...),  # Comma-separated
+    category: str = Form(..., description="Paper category: ai_cs, medicine_biology, agriculture_animal, humanities_social, economics_business"),
     abstract: Optional[str] = Form(None),
     year: Optional[int] = Form(None),
     doi: Optional[str] = Form(None),
@@ -1236,16 +1328,17 @@ async def create_manual_paper(
             "pdf_url": pdf_url,
             "source": "Manual Entry",
             "is_manual": True,
-            "citation_count": 0
+            "citation_count": 0,
+            "category": category  # Add category from form
         }
         
         result = db.execute(
             text("""
             INSERT INTO papers (
                 user_id, title, abstract, authors, publication_date,
-                doi, venue, pdf_url, source, is_manual, citation_count
+                doi, venue, pdf_url, source, is_manual, citation_count, category
             )
-            VALUES (:user_id, :title, :abstract, :authors, :publication_date, :doi, :venue, :pdf_url, :source, :is_manual, :citation_count)
+            VALUES (:user_id, :title, :abstract, :authors, :publication_date, :doi, :venue, :pdf_url, :source, :is_manual, :citation_count, :category)
             RETURNING id, title, abstract, authors, publication_date, doi, venue, pdf_url, source, citation_count
             """),
             params
@@ -1290,20 +1383,24 @@ async def create_manual_paper(
                 paper_id=paper_id,
                 project_id=0
             )
-
+        
+        # ✅ Generate embedding for searchability!
+        import asyncio
+        vector_service = get_vector_service()
+        asyncio.create_task(
+            vector_service.generate_embeddings_for_papers(
+                db=db,
+                batch_size=1,
+                max_papers=1,
+                force_regenerate=False
+            )
+        )
+        logger.info(f"✅ Queued embedding generation for manual paper {paper_id}")
         
         return {
             "id": paper_id,
-            "title": paper_data[1],
-            "abstract": paper_data[2],
-            "authors": paper_data[3],
-            "publication_date": paper_data[4],
-            "doi": paper_data[5],
-            "venue": paper_data[6],
-            "pdf_url": paper_data[7],
-            "source": paper_data[8],
-            "citation_count": paper_data[9],
-            "is_manual": True
+            "title": title,
+            "message": "Paper created successfully and will be searchable in ~30 seconds!"
         }
         
     except Exception as e:

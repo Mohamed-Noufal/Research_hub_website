@@ -16,6 +16,12 @@ async def lifespan(app: FastAPI):
     from .core.monitoring import MonitoringManager
     MonitoringManager.get_instance()
     
+    # ✅ Initialize Model Cache (load model ONCE at startup)
+    print("📊 Initializing embedding model cache...")
+    from .core.model_cache import ModelCache
+    ModelCache.initialize()
+    print("✅ Model cached successfully!")
+    
     init_db()
     print("✅ Application ready!")
 
@@ -43,14 +49,39 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files for uploads
-from fastapi.staticfiles import StaticFiles
+# Add security middlewares
+from .core.security import RateLimitMiddleware, SecurityHeadersMiddleware
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RateLimitMiddleware)
+
+# Mount static files for uploads - PDFs served via custom endpoint
 import os
 
 # Ensure uploads directory exists
 os.makedirs("uploads/pdfs", exist_ok=True)
 
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+# Custom PDF endpoint without X-Frame-Options (allows iframe embedding)
+from fastapi import HTTPException
+from fastapi.responses import FileResponse
+
+@app.get("/uploads/pdfs/{filename}")
+async def serve_pdf(filename: str):
+    """Serve PDF files without X-Frame-Options header to allow iframe embedding"""
+    file_path = f"uploads/pdfs/{filename}"
+    
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="PDF not found")
+    
+    # Return file without X-Frame-Options header
+    response = FileResponse(
+        file_path,
+        media_type="application/pdf",
+        headers={
+            "Cache-Control": "public, max-age=3600",
+            # X-Frame-Options deliberately NOT set - allows iframe embedding
+        }
+    )
+    return response
 
 
 # Root endpoint
@@ -152,10 +183,26 @@ app.include_router(
     tags=["knowledge-base"]
 )
 
+# Async upload with background processing
+from .api.v1 import upload_async
+app.include_router(
+    upload_async.router,
+    prefix=settings.API_V1_PREFIX,
+    tags=["async-upload"]
+)
 
-
-
-
+# Health checks and monitoring
+from .api.v1 import health, metrics
+app.include_router(
+    health.router,
+    prefix=settings.API_V1_PREFIX,
+    tags=["health"]
+)
+app.include_router(
+    metrics.router,
+    prefix=settings.API_V1_PREFIX,
+    tags=["metrics"]
+)
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(

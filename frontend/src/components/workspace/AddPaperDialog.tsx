@@ -20,6 +20,7 @@ interface AddPaperDialogProps {
 export interface ManualPaperData {
     title: string;
     authors: string[];
+    category: string;  // Required!
     abstract?: string;
     year?: number;
     doi?: string;
@@ -31,6 +32,7 @@ export interface ManualPaperData {
 export default function AddPaperDialog({ isOpen, onClose, onAddPaper, folders }: AddPaperDialogProps) {
     const [title, setTitle] = useState('');
     const [authors, setAuthors] = useState('');
+    const [category, setCategory] = useState('ai_cs');  // Default to AI/CS
     const [abstract, setAbstract] = useState('');
     const [year, setYear] = useState('');
     const [doi, setDoi] = useState('');
@@ -69,6 +71,7 @@ export default function AddPaperDialog({ isOpen, onClose, onAddPaper, folders }:
         const paperData: ManualPaperData = {
             title: title.trim(),
             authors: authors.split(',').map(a => a.trim()).filter(Boolean),
+            category,  // Required field!
             abstract: abstract.trim() || undefined,
             year: year ? parseInt(year) : undefined,
             doi: doi.trim() || undefined,
@@ -88,6 +91,7 @@ export default function AddPaperDialog({ isOpen, onClose, onAddPaper, folders }:
     const resetForm = () => {
         setTitle('');
         setAuthors('');
+        setCategory('ai_cs');  // Reset to default
         setAbstract('');
         setYear('');
         setDoi('');
@@ -154,6 +158,27 @@ export default function AddPaperDialog({ isOpen, onClose, onAddPaper, folders }:
                             required
                         />
                         <p className="text-xs text-gray-500 mt-1">Separate multiple authors with commas</p>
+                    </div>
+
+                    {/* Category */}
+                    <div>
+                        <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-2">
+                            Category <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                            id="category"
+                            value={category}
+                            onChange={(e) => setCategory(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                            required
+                        >
+                            <option value="ai_cs">💻 AI & CS</option>
+                            <option value="medicine_biology">🏥 Medicine & Biology</option>
+                            <option value="agriculture_animal">🌾 Agriculture & Animal Science</option>
+                            <option value="humanities_social">📚 Humanities & Social Sciences</option>
+                            <option value="economics_business">💼 Economics & Business</option>
+                        </select>
+                        <p className="text-xs text-gray-500 mt-1">Required for paper categorization and search</p>
                     </div>
 
                     {/* Abstract */}

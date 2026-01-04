@@ -33,9 +33,14 @@ arq
 tiktoken
 pymupdf
 
-# Observability & Monitoring (Phoenix + OpenTelemetry)
+# Background Task Processing
+celery[redis]
+flower
+
+# Observability & Monitoring (Phoenix + OpenTelemetry + Prometheus)
 arize-phoenix
 openinference-instrumentation-llama-index
 opentelemetry-sdk
 opentelemetry-exporter-otlp
 opentelemetry-instrumentation-fastapi
+prometheus-client

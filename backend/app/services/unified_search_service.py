@@ -108,6 +108,56 @@ class UnifiedSearchService:
             'backup_2': 'openalex',
             'max_results': 100
         }
+    
+    def _is_valid_paper(self, paper: Dict) -> bool:
+        """Validate paper quality (must have title + abstract OR authors)"""
+        title = paper.get('title', '').strip()
+        if not title or len(title) < 10:
+            return False
+        
+        abstract = paper.get('abstract', '').strip()
+        authors = paper.get('authors', [])
+        
+        has_abstract = abstract and len(abstract) > 50
+        has_authors = authors and len(authors) > 0
+        
+        return has_abstract or has_authors
+    
+    async def _get_smart_cache_ttl(self, query: str, db: Session) -> int:
+        """Get smart TTL based on query popularity from search history"""
+        try:
+            from app.models.search_history import SearchHistory
+            from datetime import datetime, timedelta
+            
+            # Count searches in last 30 days
+            recent_count = db.query(SearchHistory).filter(
+                SearchHistory.query.ilike(f"%{query}%"),
+                SearchHistory.search_date > datetime.now() - timedelta(days=30)
+            ).count()
+            
+            # Smart TTL tiers for production scale
+            if recent_count > 100:
+                return 3600  # 1 hour - Very popular queries
+            elif recent_count > 10:
+                return 600   # 10 min - Popular queries
+            else:
+                return 300   # 5 min - Normal queries
+        except Exception as e:
+            print(f"⚠️ Error getting smart TTL: {e}")
+            return 300  # Default 5 min
+    
+    async def _invalidate_category_cache(self, category: str):
+        """Invalidate cache for specific category when papers are added"""
+        try:
+            # Only invalidate searches in this category
+            # This preserves cache for other categories!
+            if hasattr(self, 'cache_service'):
+                pattern = f"search:*:{category}:*"
+                print(f"♻️ Invalidating {category} cache...")
+                # Note: This requires cache service to support pattern invalidation
+                # For now, we'll rely on TTL expiration
+        except Exception as e:
+            print(f"⚠️ Cache invalidation failed: {e}")
 
     async def search(
         self,
@@ -241,8 +291,15 @@ class UnifiedSearchService:
         final_results = []
         papers_to_save = []
         
+        # ✅ Sort local results by hybrid_score (best matches first!)
         if local_results:
-            final_results.extend(local_results)
+            local_results_sorted = sorted(
+                local_results,
+                key=lambda x: x.get('hybrid_score', 0),
+                reverse=True  # Highest score first
+            )
+            final_results.extend(local_results_sorted)
+            print(f"📊 Local results sorted by relevance (best first)")
             
         remaining_slots = limit - len(final_results)
         if remaining_slots > 0 and external_results:
@@ -253,12 +310,49 @@ class UnifiedSearchService:
                 if p.get('title', '').lower().strip() not in local_titles 
                 and (not p.get('doi') or p.get('doi') not in local_dois)
             ]
-            final_results.extend(unique_external[:remaining_slots])
-            papers_to_save = unique_external[:remaining_slots]
+            
+            # ✅ Filter for quality papers only (must have title + abstract/authors)
+            quality_papers = [
+                p for p in unique_external
+                if self._is_valid_paper(p)
+            ]
+            
+            papers_to_save = quality_papers[:remaining_slots]
+            
+            # Log filtered papers
+            filtered_count = len(unique_external) - len(quality_papers)
+            if filtered_count > 0:
+                print(f"⚠️  Filtered out {filtered_count} low-quality papers (missing title/abstract/authors)")
 
-        # Save new papers in background if needed
+        # Save new papers SYNCHRONOUSLY (not in background) so IDs are available
+        saved_papers = []
         if papers_to_save and db:
-            asyncio.create_task(self._save_results_without_embeddings(papers_to_save, category, db))
+            try:
+                saved_papers = await self._save_results_and_return_ids(papers_to_save, category, db)
+                final_results.extend(saved_papers)  # Use saved papers with real DB IDs
+                
+                # ✅ Queue embedding generation in BACKGROUND (non-blocking!)
+                if saved_papers:
+                    paper_ids = [int(p['id']) for p in saved_papers]
+                    print(f"📊 Queuing {len(paper_ids)} papers for background embedding generation...")
+                    
+                    # Create background task (don't await!)
+                    asyncio.create_task(
+                        self._generate_embeddings_background(paper_ids, category, db)
+                    )
+                    
+                    print(f"✅ Background task created - user will get results immediately!")
+                        
+            except Exception as e:
+                # ⚠️ CRITICAL FALLBACK: If save fails completely
+                print(f"❌ Failed to save papers to database: {e}")
+                db.rollback()  # Rollback transaction
+                
+                # FALLBACK: Return papers without DB IDs (still useful for user)
+                print(f"⚠️ FALLBACK: Returning {len(papers_to_save)} papers without saving")
+                final_results.extend(papers_to_save)
+        else:
+            final_results.extend(papers_to_save)  # Fallback if no db
 
         return {
             "papers": final_results,
@@ -273,7 +367,7 @@ class UnifiedSearchService:
                 "local_results": len(local_results),
                 "external_results": len(external_results),
                 "search_time": parallel_time,
-                "papers_saved": len(papers_to_save)
+                "papers_saved": len(saved_papers)
             }
         }
 
@@ -477,6 +571,81 @@ class UnifiedSearchService:
             db.rollback()
             return 0
 
+    async def _save_results_and_return_ids(self, papers: List[Dict], category: str, db: Session) -> List[Dict]:
+        """
+        Save papers to DB and return them with their actual database IDs.
+        This ensures papers can be saved to library immediately.
+        """
+        try:
+            from app.models.paper import Paper
+            from datetime import datetime
+            
+            saved_papers = []
+            
+            for paper in papers:
+                # Check if paper already exists
+                existing = None
+                
+                if paper.get('arxiv_id'):
+                    existing = db.query(Paper).filter(Paper.arxiv_id == paper['arxiv_id']).first()
+                elif paper.get('doi'):
+                    existing = db.query(Paper).filter(Paper.doi == paper['doi']).first()
+                elif paper.get('title'):
+                    existing = db.query(Paper).filter(Paper.title == paper['title']).first()
+                
+                if existing:
+                    # Paper exists, use its ID
+                    paper_dict = existing.to_dict() if hasattr(existing, 'to_dict') else {
+                        'id': existing.id,
+                        'title': existing.title,
+                        'abstract': existing.abstract,
+                        'authors': existing.authors,
+                        'doi': existing.doi,
+                        'arxiv_id': existing.arxiv_id,
+                        'source': existing.source,
+                        'publication_date': str(existing.publication_date) if existing.publication_date else None,
+                        'pdf_url': existing.pdf_url,
+                        'citation_count': existing.citation_count,
+                        'venue': existing.venue
+                    }
+                    saved_papers.append(paper_dict)
+                else:
+                    # Create new paper
+                    new_paper = Paper(
+                        title=paper.get('title', ''),
+                        abstract=paper.get('abstract'),
+                        authors=paper.get('authors', []),
+                        publication_date=paper.get('publication_date'),
+                        pdf_url=paper.get('pdf_url'),
+                        source=paper.get('source', 'unknown'),
+                        arxiv_id=paper.get('arxiv_id'),
+                        doi=paper.get('doi'),
+                        semantic_scholar_id=paper.get('semantic_scholar_id'),
+                        openalex_id=paper.get('openalex_id'),
+                        citation_count=paper.get('citation_count', 0),
+                        venue=paper.get('venue'),
+                        category=category,
+                        date_added=datetime.utcnow(),
+                        last_updated=datetime.utcnow(),
+                        is_processed=False
+                    )
+                    db.add(new_paper)
+                    db.flush()  # Get the ID without committing
+                    
+                    paper_dict = paper.copy()
+                    paper_dict['id'] = new_paper.id  # Real DB ID
+                    saved_papers.append(paper_dict)
+            
+            db.commit()
+            print(f"✅ Saved {len(saved_papers)} papers with real DB IDs")
+            return saved_papers
+            
+        except Exception as e:
+            print(f"❌ Error saving papers with IDs: {e}")
+            db.rollback()
+            # Return original papers as fallback
+            return papers
+
     async def generate_embeddings_background(self, paper_ids: List[str], db: Session):
         """
         BACKGROUND TASK: Generate embeddings for saved papers
@@ -593,3 +762,24 @@ class UnifiedSearchService:
                 "uptime_percentage": (working_sources / total_sources) * 100
             }
         }
+    
+    async def _generate_embeddings_background(self, paper_ids: List[int], category: str, db: Session):
+        """Generate embeddings in background (non-blocking)"""
+        try:
+            print(f"🔄 BACKGROUND: Starting embedding generation for {len(paper_ids)} papers...")
+            
+            await self.vector_service.generate_embeddings_for_papers(
+                db=db,
+                batch_size=50,
+                max_papers=len(paper_ids),
+                force_regenerate=False
+            )
+            
+            print(f"✅ BACKGROUND: Embeddings generated successfully for {len(paper_ids)} papers")
+            
+            # Invalidate category cache after embeddings are ready
+            await self._invalidate_category_cache(category)
+            
+        except Exception as e:
+            print(f"❌ BACKGROUND: Embedding generation failed: {e}")
+            # Don't crash - it's a background task

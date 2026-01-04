@@ -209,7 +209,9 @@ class OrchestratorAgent:
         self,
         user_id: str,
         message: str,
-        project_id: Optional[int] = None
+        project_id: Optional[int] = None,
+        scope: str = 'project',
+        selected_paper_ids: Optional[list] = None
     ):
         """
         Streaming version that yields agent thinking steps
@@ -217,7 +219,9 @@ class OrchestratorAgent:
         # Add context to agent for tools to access
         self.agent.context = {
             'user_id': user_id,
-            'project_id': project_id
+            'project_id': project_id,
+            'scope': scope,
+            'selected_paper_ids': selected_paper_ids or []
         }
         
         # Stream agent execution

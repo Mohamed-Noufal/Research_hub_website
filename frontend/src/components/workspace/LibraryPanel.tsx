@@ -127,6 +127,7 @@ export default function LibraryPanel({ onOpenPaper }: LibraryPanelProps) {
       const formData = new FormData();
       formData.append('title', paperData.title);
       formData.append('authors', paperData.authors.join(', '));
+      formData.append('category', paperData.category);  // Required!
       if (paperData.abstract) formData.append('abstract', paperData.abstract);
       if (paperData.year) formData.append('year', paperData.year.toString());
       if (paperData.doi) formData.append('doi', paperData.doi);
