@@ -117,20 +117,25 @@ async def websocket_endpoint(
             project_id = message_data.get('project_id')
             scope = message_data.get('scope', 'project')
             selected_paper_ids = message_data.get('selected_paper_ids', [])
+            model_id = message_data.get('model_id')  # NEW: Model selection from frontend
             
             if not message_text:
                 continue
                 
             # Stream response
+            from fastapi.encoders import jsonable_encoder
             async for update in service.process_message(
                 user_id=user_id,
                 conversation_id=conversation_id,
                 message=message_text,
                 project_id=project_id,
                 scope=scope,
-                selected_paper_ids=selected_paper_ids
+                selected_paper_ids=selected_paper_ids,
+                model_id=model_id  # NEW: Pass model selection
             ):
-                await websocket.send_json(update)
+                # Convert datetime and other non-JSON types
+                safe_update = jsonable_encoder(update)
+                await websocket.send_json(safe_update)
                 
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected: {conversation_id}")

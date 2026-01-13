@@ -39,11 +39,16 @@ class UnifiedSearchService:
     - Deduplication and semantic reranking
     """
 
-    def __init__(self, cache_service: CacheService = None):
+    def __init__(
+        self, 
+        cache_service: CacheService = None,
+        vector_service: EnhancedVectorService = None,
+        ai_analyzer: AIQueryAnalyzer = None
+    ):
         self.config = SearchConfig()
         self.cache = cache_service or CacheService()
-        self.vector_service = EnhancedVectorService()
-        self.ai_analyzer = AIQueryAnalyzer()
+        self.vector_service = vector_service or EnhancedVectorService()
+        self.ai_analyzer = ai_analyzer or AIQueryAnalyzer()
 
         # Initialize all sources
         self.sources = {}

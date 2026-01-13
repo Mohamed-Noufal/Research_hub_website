@@ -47,8 +47,9 @@ celery_app.conf.update(
     enable_utc=True,
 )
 
-# Optional: Configure task routing
-celery_app.conf.task_routes = {
-    "app.workers.tasks.ingest_paper_task": {"queue": "ingestion"},
-    "app.workers.tasks.update_embeddings_task": {"queue": "embeddings"},
-}
+# Use default queue for all tasks (simpler setup)
+# For production, you might want separate queues:
+# celery_app.conf.task_routes = {
+#     "app.workers.tasks.ingest_paper_task": {"queue": "ingestion"},
+#     "app.workers.tasks.update_embeddings_task": {"queue": "embeddings"},
+# }

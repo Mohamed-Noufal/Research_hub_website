@@ -29,7 +29,7 @@ class AIQueryAnalyzer:
             # Run synchronous Groq call in thread pool
             response = await asyncio.to_thread(
                 self.client.chat.completions.create,
-                model="llama-3.1-8b-instant",  # Use the working model
+                model="qwen/qwen3-32b",  # Switched to Qwen 3 32B
                 messages=[{
                     "role": "user",
                     "content": self._create_prompt(user_query)
@@ -102,7 +102,7 @@ Now generate 4 academic search queries for: "{user_query}"
             # Run synchronous Groq call in thread pool
             response = await asyncio.to_thread(
                 self.client.chat.completions.create,
-                model="llama-3.1-8b-instant",
+                model="qwen/qwen3-32b",
                 messages=[{
                     "role": "user",
                     "content": self._create_suggestion_prompt(context, category)

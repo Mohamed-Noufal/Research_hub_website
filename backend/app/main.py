@@ -3,7 +3,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .core.config import settings
 from .core.database import init_db
-from .api.v1 import papers, users, search_history, admin, folders, table_config, methodology, findings, comparison, synthesis, analysis, agent
+from .api.v1 import (
+    papers_core, papers_embeddings, papers_doi, papers_pdf, papers_manual,
+    users, search_history, admin, folders, table_config, 
+    methodology, findings, comparison, synthesis, analysis, agent, pdf
+)
 
 # Lifespan context manager for startup/shutdown events
 @asynccontextmanager
@@ -104,8 +108,30 @@ async def health():
 
 
 # Include routers
+# Include routers
+# Refactored papers modules
 app.include_router(
-    papers.router,
+    papers_core.router,
+    prefix=settings.API_V1_PREFIX,
+    tags=["papers"]
+)
+app.include_router(
+    papers_embeddings.router,
+    prefix=settings.API_V1_PREFIX,
+    tags=["embeddings"]
+)
+app.include_router(
+    papers_doi.router,
+    prefix=settings.API_V1_PREFIX,
+    tags=["papers"]
+)
+app.include_router(
+    papers_pdf.router,
+    prefix=settings.API_V1_PREFIX,
+    tags=["papers"]
+)
+app.include_router(
+    papers_manual.router,
     prefix=settings.API_V1_PREFIX,
     tags=["papers"]
 )
@@ -189,6 +215,13 @@ app.include_router(
     upload_async.router,
     prefix=settings.API_V1_PREFIX,
     tags=["async-upload"]
+)
+
+# PDF processing endpoints
+app.include_router(
+    pdf.router,
+    prefix=settings.API_V1_PREFIX,
+    tags=["pdf"]
 )
 
 # Health checks and monitoring

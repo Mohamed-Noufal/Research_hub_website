@@ -5,9 +5,20 @@ Implements ReAct pattern (Think-Act-Observe) with streaming support
 import logging
 from typing import List, Dict, Any, Callable, Optional, AsyncGenerator
 from pydantic import BaseModel
+from app.core.config import settings
 from opentelemetry import trace
-from opentelemetry.trace import Status, StatusCode
+from opentelemetry.trace import Status, StatusCode, SpanKind
 from app.core.monitoring import get_tracer
+
+# OpenInference semantic conventions for Phoenix
+OPENINFERENCE_SPAN_KIND = "openinference.span.kind"
+INPUT_VALUE = "input.value"
+OUTPUT_VALUE = "output.value"
+LLM_MODEL_NAME = "llm.model_name"
+LLM_INPUT_MESSAGES = "llm.input_messages"
+LLM_OUTPUT_MESSAGES = "llm.output_messages"
+TOOL_NAME = "tool.name"
+TOOL_PARAMETERS = "tool.parameters"
 
 logger = logging.getLogger(__name__)
 
@@ -28,13 +39,59 @@ class FlexibleAgent:
         name: str,
         llm_client: Any,
         tools: List[Tool],
-        max_iterations: int = 3  # Reduced from 10 for production efficiency
+        max_iterations: int = None  # Defaults to settings.AGENT_MAX_ITERATIONS
     ):
         self.name = name
         self.llm = llm_client
         self.tools = {t.name: t for t in tools}
-        self.max_iterations = max_iterations
+        self.max_iterations = max_iterations if max_iterations is not None else settings.AGENT_MAX_ITERATIONS
         self.context = {}  # Dynamic context (e.g., user_id, project_id)
+    
+    def _update_active_context(self, action: str, observation: Any):
+        """
+        Extract and update active context from tool observations.
+        This helps the agent avoid redundant lookups in subsequent turns.
+        """
+        if not self.context or 'active_context' not in self.context:
+            return  # No active context to update
+        
+        active_ctx = self.context['active_context']
+        
+        try:
+            # Handle get_project_by_name results
+            if action == 'get_project_by_name':
+                if isinstance(observation, dict) and 'id' in observation:
+                    active_ctx['current_project'] = {
+                        'id': observation.get('id'),
+                        'name': observation.get('title') or observation.get('name', 'Unknown')
+                    }
+                    logger.info(f"📌 Active context: Set current_project = {active_ctx['current_project']}")
+            
+            # Handle get_project_papers results
+            elif action == 'get_project_papers':
+                if isinstance(observation, list):
+                    # Store resolved papers for quick reference
+                    active_ctx['resolved_papers'] = [
+                        {'id': p.get('id'), 'title': p.get('title', 'Unknown')[:50]}
+                        for p in observation[:5]  # Keep top 5
+                    ]
+                    # If only one paper, set as current
+                    if len(observation) == 1:
+                        active_ctx['current_paper'] = {
+                            'id': observation[0].get('id'),
+                            'title': observation[0].get('title', 'Unknown')
+                        }
+                    logger.info(f"📌 Active context: Resolved {len(active_ctx['resolved_papers'])} papers")
+            
+            # Handle extract_methodology, extract_findings - set current paper if paper_id in input
+            elif action in ['extract_methodology', 'extract_findings', 'get_paper_sections']:
+                # These tools work on a specific paper, note it as current
+                # The input was action_input which we don't have here, but observation often contains paper info
+                if isinstance(observation, dict) and 'paper_id' in str(observation):
+                    pass  # Paper ID is implicit from the call
+                    
+        except Exception as e:
+            logger.warning(f"Failed to update active context: {e}")
         
     def _get_system_prompt(self) -> str:
         """Construct system prompt with tool definitions"""
@@ -45,9 +102,44 @@ class FlexibleAgent:
         
         # Add context information if available
         context_info = ""
+        active_context_info = ""
+        
         if self.context:
-            if 'project_id' in self.context:
-                context_info = f"\n\nCurrent Context:\n- Project ID: {self.context['project_id']}\n- User ID: {self.context.get('user_id', 'unknown')}"
+            scope = self.context.get('scope', 'library')
+            selected_paper_ids = self.context.get('selected_paper_ids', [])
+            project_id = self.context.get('project_id')
+            user_id = self.context.get('user_id', 'unknown')
+            
+            # Build active context block if we have resolved entities
+            active_ctx = self.context.get('active_context', {})
+            if active_ctx:
+                current_project = active_ctx.get('current_project')
+                current_paper = active_ctx.get('current_paper')
+                resolved_papers = active_ctx.get('resolved_papers', [])
+                
+                if current_project or current_paper or resolved_papers:
+                    active_context_info = "\n\nACTIVE CONTEXT (Already resolved - use these IDs directly!):"
+                    if current_project:
+                        active_context_info += f"\n- Current Project: {current_project.get('name', 'Unknown')} (ID: {current_project.get('id')})"
+                    if current_paper:
+                        active_context_info += f"\n- Current Paper: {current_paper.get('title', 'Unknown')[:50]}... (ID: {current_paper.get('id')})"
+                    if resolved_papers:
+                        papers_str = ", ".join([f"{p.get('title', 'Unknown')[:30]}... (ID:{p.get('id')})" for p in resolved_papers[:3]])
+                        active_context_info += f"\n- Papers in conversation: {papers_str}"
+                    active_context_info += "\n\nIMPORTANT: If active context shows a project/paper, use those IDs directly without re-fetching!"
+            
+            context_info = f"""
+
+Current Knowledge Base Context:
+- User ID: {user_id}
+- Scope: {scope}
+- Project ID: {project_id if project_id else 'None'}
+- Selected Paper IDs: {selected_paper_ids if selected_paper_ids else 'All papers in library'}
+{active_context_info}
+
+IMPORTANT: Use these IDs when user asks about "selected papers" or "my papers".
+If selected_paper_ids has specific IDs, ONLY work with those papers.
+If empty, work with ALL papers in library."""
         
         return f"""You are {self.name}, an AI assistant specialized in academic literature review.
 
@@ -56,18 +148,35 @@ class FlexibleAgent:
 Available Tools:
 {tool_descs}
 
-DECISION RULES:
-1. If user asks about papers, methodology, findings, or comparisons → USE TOOLS
-   Examples that REQUIRE tools:
-   - "Show me methodology for paper X" → use extract_methodology
-   - "What papers are in this project?" → use get_project_papers  
-   - "Compare these papers" → use compare_papers
-   - "Search for X topic" → use semantic_search
+TOOL SELECTION RULES (CRITICAL - Follow These Exactly):
 
-2. If user asks simple questions or greetings → DIRECT ANSWER
-   Examples: "Hi", "How are you?", "What can you do?"
+1. TO SUMMARIZE A PAPER BY TITLE (User doesn't know ID!):
+   - Step 1: list_papers_in_library() → Find the paper by matching title
+   - Step 2: get_paper_sections(paper_id=X) → Get content using found ID
+   - Step 3: Synthesize into summary
 
-3. After getting tool results → SYNTHESIZE and give Final Answer
+2. TO GET METHODOLOGY/FINDINGS BY TITLE:
+   - Step 1: list_papers_in_library() → Find paper ID by title
+   - Step 2: get_paper_sections(paper_id=X, section_types=['methodology'])
+
+3. TO LIST USER'S PAPERS:
+   - Use: list_papers_in_library() → Returns all papers with IDs and titles
+
+4. TO GET TABLES/EQUATIONS from a paper:
+   - First find ID via list_papers_in_library() if user gives title
+   - Then: get_paper_tables(paper_id=X) or get_paper_equations(paper_id=X)
+
+5. FOR GREETINGS (Hi, Hello, What can you do?):
+   - Give direct Final Answer without tools
+
+CRITICAL WORKFLOW - User Gives Paper Title:
+User: "Summarize the GAN Vocoder paper"
+Step 1: {{"action": "list_papers_in_library", "action_input": {{}}}}
+[Observe: [{{"id": 1977, "title": "Attention Is All You Need"}}, {{"id": 1719, "title": "GAN Vocoder..."}}]]
+Step 2: {{"action": "get_paper_sections", "action_input": {{"paper_id": 1719}}}}
+[Observe: Returns sections text]
+Step 3: {{"action": "Final Answer", "action_input": "Here's a summary of GAN Vocoder: [synthesize sections]"}}
+
 
 MULTI-STEP REASONING:
 You can chain multiple actions together intelligently:
@@ -112,33 +221,57 @@ User: "Hello"
 You: {{"action": "Final Answer", "action_input": "Hello! I'm your AI research assistant. I can help you explore methodologies, compare papers, and analyze your literature review."}}
 """
 
-    async def run_streaming(self, input_text: str) -> AsyncGenerator[Dict[str, Any], None]:
+    async def run_streaming(self, input_text: str, chat_history: list = None) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Run the agent loop with streaming events (Think -> Act -> Observe)
         Yields status updates for UI display
         """
         tracer = get_tracer(__name__)
-        with tracer.start_as_current_span(f"AgentRun.{self.name}") as run_span:
-            history = [f"User: {input_text}"]
-            last_action = None
+        with tracer.start_as_current_span(f"AgentRun.{self.name}", kind=SpanKind.INTERNAL) as run_span:
+            # Set OpenInference semantic attributes for Phoenix
+            run_span.set_attribute(OPENINFERENCE_SPAN_KIND, "AGENT")
+            run_span.set_attribute(INPUT_VALUE, input_text)
+            run_span.set_attribute("agent.name", self.name)
+            
+            # Initialize history with previous chat context + current input
+            history = (chat_history or []) + [f"User: {input_text}"]
+            action_history = set()  # Track (action, params_hash) pairs for better loop detection
             
             for i in range(self.max_iterations):
                 # 1. THINK
                 yield {"type": "thinking", "step": i+1, "message": "Analyzing your request..."}
                 
-                with tracer.start_as_current_span(f"Think_Step_{i+1}") as think_span:
+                with tracer.start_as_current_span(f"Think_Step_{i+1}", kind=SpanKind.CLIENT) as think_span:
+                    think_span.set_attribute(OPENINFERENCE_SPAN_KIND, "LLM")
+                    think_span.set_attribute(LLM_MODEL_NAME, "qwen/qwen3-32b")
+                    
                     prompt = self._get_system_prompt() + "\n\nConversation:\n" + "\n".join(history) + "\n\nAssistant:"
+                    think_span.set_attribute(INPUT_VALUE, prompt[-2000:])  # Last 2000 chars to avoid huge spans
                     
                     response = await self.llm.complete(
                         prompt=prompt,
                         temperature=0.1
                     )
+                    think_span.set_attribute(OUTPUT_VALUE, response)
                     think_span.set_attribute("llm.response", response)
                 
                 try:
-                    # Parse JSON response
-                    cleaned_response = response.replace("```json", "").replace("```", "").strip()
+                    # Parse JSON response - handle Qwen3 <think> tags and text before JSON
                     import json
+                    import hashlib
+                    import re
+                    
+                    # Remove markdown code blocks
+                    cleaned_response = response.replace("```json", "").replace("```", "").strip()
+                    
+                    # Remove Qwen3 <think>...</think> reasoning blocks
+                    cleaned_response = re.sub(r'<think>.*?</think>', '', cleaned_response, flags=re.DOTALL).strip()
+                    
+                    # Try to find JSON object in response
+                    json_match = re.search(r'\{[^{}]*"action"[^{}]*\}', cleaned_response)
+                    if json_match:
+                        cleaned_response = json_match.group()
+                    
                     action_data = json.loads(cleaned_response)
                     
                     action = action_data.get("action")
@@ -146,16 +279,19 @@ You: {{"action": "Final Answer", "action_input": "Hello! I'm your AI research as
                     
                     run_span.add_event(f"Decision_Made", attributes={"action": action, "step": i+1})
                     
-                    # Loop detection
-                    if action == last_action and action != "Final Answer":
-                        logger.warning(f"🔁 Loop detected: '{action}' called twice.")
+                    # Improved loop detection: track action + params hash
+                    params_hash = hashlib.md5(str(action_input).encode()).hexdigest()[:8]
+                    action_key = f"{action}:{params_hash}"
+                    
+                    if action_key in action_history and action != "Final Answer":
+                        logger.warning(f"🔁 Loop detected: '{action}' called with same params twice.")
                         run_span.set_status(Status(StatusCode.ERROR, "Loop detected"))
                         yield {
                             "type": "error",
                             "message": "I'm having trouble completing this task. Could you rephrase your question?"
                         }
                         return
-                    last_action = action
+                    action_history.add(action_key)
                     
                     logger.info(f"🤔 Step {i+1}: Decision -> {action}")
                     
@@ -184,7 +320,10 @@ You: {{"action": "Final Answer", "action_input": "Hello! I'm your AI research as
                         "step": i+1
                     }
                     
-                    with tracer.start_as_current_span(f"Act_Step_{i+1}") as act_span:
+                    with tracer.start_as_current_span(f"Act_Step_{i+1}", kind=SpanKind.INTERNAL) as act_span:
+                        act_span.set_attribute(OPENINFERENCE_SPAN_KIND, "TOOL")
+                        act_span.set_attribute(TOOL_NAME, action)
+                        act_span.set_attribute(INPUT_VALUE, str(action_input)[:1000])
                         act_span.set_attribute("tool.name", action)
                         act_span.set_attribute("tool.input", str(action_input))
                         
@@ -194,14 +333,28 @@ You: {{"action": "Final Answer", "action_input": "Hello! I'm your AI research as
                         try:
                             # Execute tool
                             import inspect
-                            if inspect.iscoroutinefunction(tool.function):
-                                observation = await tool.function(**action_input)
-                            else:
-                                result = tool.function(**action_input)
-                                if inspect.iscoroutine(result):
-                                    observation = await result
+                            
+                            # If tool has no parameters, call without args
+                            # (lambda captures context internally)
+                            if not tool.parameters:
+                                if inspect.iscoroutinefunction(tool.function):
+                                    observation = await tool.function()
                                 else:
-                                    observation = result
+                                    result = tool.function()
+                                    if inspect.iscoroutine(result):
+                                        observation = await result
+                                    else:
+                                        observation = result
+                            else:
+                                # Tool has parameters, pass action_input
+                                if inspect.iscoroutinefunction(tool.function):
+                                    observation = await tool.function(**action_input)
+                                else:
+                                    result = tool.function(**action_input)
+                                    if inspect.iscoroutine(result):
+                                        observation = await result
+                                    else:
+                                        observation = result
                             
                             # Emit result event
                             yield {
@@ -214,6 +367,9 @@ You: {{"action": "Final Answer", "action_input": "Hello! I'm your AI research as
                             history.append(f"Action: {action}\nInput: {action_input}\n{result_str}")
                             logger.info(f"👀 Observation: {str(observation)[:100]}...")
                             act_span.set_attribute("tool.output", str(observation)[:500])
+                            
+                            # Update active context from tool results
+                            self._update_active_context(action, observation)
                             
                         except Exception as e:
                             error_msg = str(e)[:200]

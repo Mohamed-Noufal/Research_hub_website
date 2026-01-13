@@ -67,8 +67,8 @@ async def upload_paper_async(
     try:
         result = db.execute(
             text("""
-                INSERT INTO papers (title, source, is_manual, user_id, local_file_path, is_processed)
-                VALUES (:title, 'async_upload', TRUE, :user_id, :file_path, FALSE)
+                INSERT INTO papers (title, source, is_manual, user_id, local_file_path, pdf_url, is_processed, processing_status)
+                VALUES (:title, 'async_upload', TRUE, :user_id, :file_path, :file_path, FALSE, 'pending')
                 RETURNING id
             """),
             {
@@ -85,7 +85,7 @@ async def upload_paper_async(
             file_path.unlink()
         raise HTTPException(status_code=500, detail=f"Failed to create paper record: {e}")
     
-    # Queue background task
+    # Queue RAG ingestion task (embeddings for vector search)
     task = ingest_paper_task.delay(
         paper_id=paper_id,
         pdf_path=str(file_path),
@@ -94,11 +94,39 @@ async def upload_paper_async(
         project_id=project_id
     )
     
+    # Also trigger content extraction (sections/tables/equations) in background
+    import asyncio
+    from app.core.pdf_extractor import process_and_store_pdf
+    
+    async def extract_content():
+        try:
+            from app.core.database import SessionLocal
+            bg_db = SessionLocal()
+            try:
+                await process_and_store_pdf(
+                    db=bg_db,
+                    paper_id=paper_id,
+                    pdf_path=str(file_path),
+                    user_id=user_id
+                )
+            finally:
+                bg_db.close()
+        except Exception as e:
+            print(f"⚠️ Content extraction failed: {e}")
+    
+    # Fire-and-forget
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.create_task(extract_content())
+    except RuntimeError:
+        pass  # No event loop available, will be processed via /pdf/process API
+    
     return {
         "paper_id": paper_id,
         "task_id": task.id,
         "status": "queued",
-        "message": f"Paper '{paper_title}' queued for processing"
+        "message": f"Paper '{paper_title}' queued for processing (RAG + content extraction)"
     }
 
 

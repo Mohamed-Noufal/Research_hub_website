@@ -92,7 +92,7 @@ class LLMClient:
     async def complete(
         self,
         prompt: str,
-        model: str = "llama-3.3-70b-versatile",
+        model: str = "qwen/qwen3-32b",
         temperature: float = 0.5,
         max_tokens: int = 1024,
         system_prompt: str = "You represent a helpful AI assistant."
@@ -144,6 +144,22 @@ class LLMClient:
             
             # Log usage
             self._log_usage(model, input_tokens, output_tokens, duration_ms)
+
+            # Add attributes to current OpenTelemetry span for Phoenix/Tracing
+            try:
+                from opentelemetry import trace
+                span = trace.get_current_span()
+                if span:
+                    span.set_attribute("llm.token_count.prompt", input_tokens)
+                    span.set_attribute("llm.token_count.completion", output_tokens)
+                    span.set_attribute("llm.token_count.total", input_tokens + output_tokens)
+                    
+                    # Cost (custom attribute)
+                    cost = (input_tokens / 1000 * self.cost_per_1k_input) + (output_tokens / 1000 * self.cost_per_1k_output)
+                    span.set_attribute("llm.cost.usd", cost)
+                    span.set_attribute("llm.model", model)
+            except Exception:
+                pass
             
             return content
             

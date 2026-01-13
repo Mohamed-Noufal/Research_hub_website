@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from 'react';
 import {
   Brain, CheckCircle2, Loader2,
-  Plus, ArrowRight
+  Plus, ArrowRight, Sparkles, ChevronDown
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
@@ -18,6 +18,18 @@ import {
 } from "../ui/dropdown-menu";
 import { Badge } from "../ui/badge";
 import PaperPicker from './PaperPicker';
+
+// Available LLM Models
+const AVAILABLE_MODELS = [
+  { id: 'groq/qwen3-32b', name: 'Qwen 32B', provider: 'Groq', tier: 'free', isDefault: true },
+  { id: 'groq/llama-3.1-70b', name: 'Llama 3.1 70B', provider: 'Groq', tier: 'free' },
+  { id: 'together/qwen3-235b', name: 'Qwen3 235B', provider: 'Together', tier: 'balanced', badge: 'Best Value' },
+  { id: 'together/llama-3.1-70b', name: 'Llama 3.1 70B', provider: 'Together', tier: 'balanced' },
+  { id: 'openai/gpt-5-nano', name: 'GPT-5 Nano', provider: 'OpenAI', tier: 'budget' },
+  { id: 'openai/gpt-5-mini', name: 'GPT-5 Mini', provider: 'OpenAI', tier: 'balanced' },
+  { id: 'openai/gpt-5.1', name: 'GPT-5.1', provider: 'OpenAI', tier: 'premium', badge: 'Best Quality' },
+  { id: 'google/gemini-3-flash', name: 'Gemini 3 Flash', provider: 'Google', tier: 'budget', badge: '1M Context' },
+];
 
 interface AIAssistantProps {
   papers: Paper[];
@@ -58,11 +70,19 @@ export default function AIAssistant({ papers, projectId }: AIAssistantProps) {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
-  const [userId, setUserId] = useState<string | null>(() => localStorage.getItem('paper-search-user-uuid-v1'));
+  // Check both localStorage keys for backwards compatibility
+  const [userId, setUserId] = useState<string | null>(() =>
+    localStorage.getItem('userId') || localStorage.getItem('paper-search-user-uuid-v1')
+  );
 
   const [scope, setScope] = useState<'project' | 'library' | 'selection'>('project');
   const [selectedPaperIds, setSelectedPaperIds] = useState<string[]>([]);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
+
+  // Model selection state
+  const [selectedModel, setSelectedModel] = useState(() =>
+    localStorage.getItem('ai-selected-model') || 'groq/qwen3-32b'
+  );
 
   // Auto-open picker when selection scope is chosen
   const handleScopeChange = (val: 'project' | 'library' | 'selection') => {
@@ -70,6 +90,12 @@ export default function AIAssistant({ papers, projectId }: AIAssistantProps) {
     if (val === 'selection' && selectedPaperIds.length === 0) {
       setIsPickerOpen(true);
     }
+  };
+
+  // Save model selection to localStorage
+  const handleModelChange = (modelId: string) => {
+    setSelectedModel(modelId);
+    localStorage.setItem('ai-selected-model', modelId);
   };
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -91,6 +117,8 @@ export default function AIAssistant({ papers, projectId }: AIAssistantProps) {
           const res = await fetch(`${API_BASE_URL}/users/init`, { method: 'POST' });
           const data = await res.json();
           setUserId(data.user_id);
+          // Store in both keys for backwards compatibility
+          localStorage.setItem('userId', data.user_id);
           localStorage.setItem('paper-search-user-uuid-v1', data.user_id);
         } catch (err) {
           console.error("Failed to init user", err);
@@ -300,7 +328,9 @@ export default function AIAssistant({ papers, projectId }: AIAssistantProps) {
       project_id: projectId ? Number(projectId) : null,
       user_id: userId,
       scope: scope,
-      selected_paper_ids: scope === 'selection' ? selectedPaperIds : []
+      model_id: selectedModel,
+      // Convert paper IDs to integers for backend compatibility
+      selected_paper_ids: scope === 'selection' ? selectedPaperIds.map(id => parseInt(id, 10)) : []
     }));
   };
 
@@ -489,6 +519,76 @@ export default function AIAssistant({ papers, projectId }: AIAssistantProps) {
                   </Badge>
                 )}
               </div>
+
+              {/* Center: Model Selector */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    className="h-7 px-2 text-xs font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg gap-1"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    <span className="max-w-[100px] truncate">
+                      {AVAILABLE_MODELS.find(m => m.id === selectedModel)?.name || 'Select Model'}
+                    </span>
+                    <ChevronDown className="w-3 h-3 opacity-50" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="center" className="w-64 p-2 bg-white border border-gray-200 shadow-lg rounded-xl">
+                  <DropdownMenuLabel className="text-xs font-semibold text-gray-400 mb-1 uppercase tracking-wider px-3 py-2">
+                    Model
+                  </DropdownMenuLabel>
+
+                  {/* Free Models */}
+                  <div className="px-2 py-1">
+                    <span className="text-[10px] font-medium text-green-600 uppercase tracking-wider">Free</span>
+                  </div>
+                  {AVAILABLE_MODELS.filter(m => m.tier === 'free').map(model => (
+                    <DropdownMenuItem
+                      key={model.id}
+                      className="flex items-center justify-between cursor-pointer rounded-lg px-3 py-2 text-gray-700 data-[highlighted]:bg-gray-50"
+                      onClick={() => handleModelChange(model.id)}
+                    >
+                      <div className="flex flex-col">
+                        <span className={`text-sm ${selectedModel === model.id ? 'font-semibold text-gray-900' : 'font-medium'}`}>
+                          {model.name}
+                        </span>
+                        <span className="text-[10px] text-gray-400">{model.provider}</span>
+                      </div>
+                      {selectedModel === model.id && <CheckCircle2 className="w-4 h-4 text-blue-600" />}
+                    </DropdownMenuItem>
+                  ))}
+
+                  <DropdownMenuSeparator className="my-1 bg-gray-100" />
+
+                  {/* Paid Models */}
+                  <div className="px-2 py-1">
+                    <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">Paid</span>
+                  </div>
+                  {AVAILABLE_MODELS.filter(m => m.tier !== 'free').map(model => (
+                    <DropdownMenuItem
+                      key={model.id}
+                      className="flex items-center justify-between cursor-pointer rounded-lg px-3 py-2 text-gray-700 data-[highlighted]:bg-gray-50"
+                      onClick={() => handleModelChange(model.id)}
+                    >
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`text-sm ${selectedModel === model.id ? 'font-semibold text-gray-900' : 'font-medium'}`}>
+                            {model.name}
+                          </span>
+                          {model.badge && (
+                            <span className="text-[9px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded font-medium">
+                              {model.badge}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-gray-400">{model.provider}</span>
+                      </div>
+                      {selectedModel === model.id && <CheckCircle2 className="w-4 h-4 text-blue-600" />}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
 
               {/* Right: Send Button */}
               <Button

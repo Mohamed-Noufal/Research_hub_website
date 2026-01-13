@@ -85,6 +85,9 @@ class UserService:
 
             db.add(saved_paper)
             db.commit()
+            
+            # AUTO-TRIGGER PDF PROCESSING (Global - once per paper_id)
+            self._trigger_pdf_processing_if_needed(db, paper_id)
 
             return {"status": "saved", "id": saved_paper.id}
 
@@ -92,6 +95,72 @@ class UserService:
             print(f"❌ Error saving paper: {e}")
             db.rollback()
             raise
+    
+    def _trigger_pdf_processing_if_needed(self, db: Session, paper_id: int):
+        """Check if paper has LOCAL PDF file and needs processing, then trigger background job"""
+        try:
+            import os
+            # Check paper status
+            paper = db.query(Paper).filter(Paper.id == paper_id).first()
+            if not paper:
+                return
+            
+            # Skip if already processed
+            if paper.is_processed or paper.processing_status == 'completed':
+                print(f"📄 Paper {paper_id} already processed, skipping")
+                return
+            
+            # ONLY trigger if there's an actual local PDF file
+            if not paper.local_file_path:
+                print(f"📄 Paper {paper_id} has no local PDF file, skipping processing")
+                return
+            
+            # Verify file actually exists
+            if not os.path.exists(paper.local_file_path):
+                print(f"📄 Paper {paper_id} local PDF file not found: {paper.local_file_path}")
+                return
+            
+            # Update status to pending
+            paper.processing_status = 'pending'
+            db.commit()
+            
+            # Queue background processing
+            print(f"📄 Queueing PDF processing for paper {paper_id}: {paper.title[:50]}...")
+            
+            # Import and call async (this will run in background on next tick)
+            import asyncio
+            from app.core.pdf_extractor import process_and_store_pdf
+            
+            pdf_path = paper.local_file_path
+            
+            async def process_async():
+                from app.core.database import SessionLocal
+                bg_db = SessionLocal()
+                try:
+                    await process_and_store_pdf(
+                        db=bg_db,
+                        paper_id=paper_id,
+                        pdf_path=pdf_path,  # Use local file path
+                        user_id=None  # Global processing, not user-specific
+                    )
+                except Exception as e:
+                    print(f"❌ Background PDF processing failed: {e}")
+                finally:
+                    bg_db.close()
+            
+            # Schedule but don't await (fire-and-forget)
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    asyncio.create_task(process_async())
+                else:
+                    asyncio.run(process_async())
+            except RuntimeError:
+                # No event loop, create one
+                asyncio.run(process_async())
+                
+        except Exception as e:
+            print(f"⚠️ Could not trigger PDF processing: {e}")
 
     def unsave_paper(self, db: Session, user_id: str, paper_id: int) -> bool:
         """Remove a paper from user's library"""
@@ -118,7 +187,7 @@ class UserService:
 
             saved_papers = db.query(UserSavedPaper).filter(
                 UserSavedPaper.user_id == user_uuid
-            ).join(Paper).all()
+            ).order_by(UserSavedPaper.saved_at.desc()).join(Paper).all()
 
             result = []
             for saved in saved_papers:

@@ -49,9 +49,9 @@ class RAGEngine:
         if not api_key:
              logger.warning("⚠️ GROQ_API_KEY not found. LLM functionality will fail if initialized.")
 
-        logger.info("🔧 Initializing Groq LLM (llama-3.3-70b-versatile)...")
+        logger.info("🔧 Initializing Groq LLM (qwen/qwen3-32b)...")
         self.llm = Groq(
-            model="llama-3.3-70b-versatile",
+            model="qwen/qwen3-32b",
             api_key=api_key
         )
         

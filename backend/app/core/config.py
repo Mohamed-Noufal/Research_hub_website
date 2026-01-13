@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     DEBUG_LOG_LEVEL: str = "INFO"
     
     # AI Agent Configuration
-    AGENT_MAX_ITERATIONS: int = 3  # Reduced from 10 for production (saves API costs)
+    AGENT_MAX_ITERATIONS: int = 8  # Default for complex tasks; override via .env
     AGENT_TIMEOUT_SECONDS: int = 300
     EMBEDDING_MODEL: str = "BAAI/bge-small-en-v1.5"
     CHUNK_SIZE: int = 512
@@ -51,6 +51,7 @@ class Settings(BaseSettings):
         # Point to backend/.env
         env_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".env")
         case_sensitive = True
+        extra = "ignore"  # Allow extra env vars like OPENAI_API_KEY, TOGETHER_API_KEY
 
 
 settings = Settings()

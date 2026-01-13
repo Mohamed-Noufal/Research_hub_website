@@ -30,10 +30,18 @@ class AgentService:
             try:
                 db = SessionLocal()
                 llm = LLMClient(db)
-                # RAG is lazy-loaded only when tools need it (prevents 60s startup delay)
-                rag = None  
+                
+                # Initialize RAG engine (required for semantic search tools)
+                from app.core.rag_engine import RAGEngine
+                try:
+                    rag = RAGEngine()
+                    logger.info("✅ RAG Engine initialized successfully")
+                except Exception as rag_error:
+                    logger.warning(f"⚠️ RAG Engine failed to initialize: {rag_error}")
+                    rag = None
+                
                 AgentService._orchestrator = OrchestratorAgent(llm, db, rag)
-                logger.info("✅ Orchestrator Agent initialized in Service (RAG will load on first use)")
+                logger.info("✅ Orchestrator Agent initialized in Service")
             except Exception as e:
                 logger.error(f"❌ Failed to initialize Orchestrator: {e}")
                 # We don't raise here to allow API to start, but agent endpoints will fail
@@ -105,7 +113,8 @@ class AgentService:
         message: str,
         project_id: Optional[int] = None,
         scope: Optional[str] = 'project',
-        selected_paper_ids: Optional[List[int]] = None
+        selected_paper_ids: Optional[List[int]] = None,
+        model_id: Optional[str] = None  # NEW: Model selection
     ) -> AsyncGenerator[Dict, None]:
         """
         Process a user message and stream updates/response
@@ -117,6 +126,10 @@ class AgentService:
 
         db = SessionLocal()
         final_answer = None
+        
+        # Log model selection
+        if model_id:
+            logger.info(f"🤖 Using model: {model_id}")
         
         try:
             # 1. Save User Message
@@ -137,23 +150,43 @@ class AgentService:
                 )
                 db.commit()
 
-            # 2. Stream Agent Execution
-            # Forward all events from agent to frontend
-            async for event in self._orchestrator.process_user_message_streaming(
-                user_id=user_id,
-                message=message,
+            # 2. Fetch Conversation History (Limit to last 6 messages for context)
+            history_rows = db.execute(
+                text("""
+                    SELECT role, content 
+                    FROM agent_messages 
+                    WHERE conversation_id = :conv_id 
+                    ORDER BY created_at DESC 
+                    LIMIT 6
+                """),
+                {'conv_id': conversation_id}
+            ).fetchall()
+            
+            # Reformat history for agent (Oldest first)
+            chat_history = []
+            for row in reversed(history_rows):
+                # Skip the message we just added (to avoid duplication if logic changes)
+                if row.content == message and row.role == 'user':
+                    continue
+                    
+                role_label = "User" if row.role == "user" else "Assistant"
+                chat_history.append(f"{role_label}: {row.content}")
+
+            # 3. Stream Response
+            async for update in self._orchestrator.process_user_message_streaming(
+                user_id=user_id, 
+                message=message, 
                 project_id=project_id,
                 scope=scope,
-                selected_paper_ids=selected_paper_ids
+                selected_paper_ids=selected_paper_ids,
+                chat_history=chat_history,
+                model_id=model_id  # NEW: Pass model selection
             ):
-                # Capture final message for database
-                if event["type"] == "message":
-                    final_answer = event["content"]
-                
-                # Forward event to frontend
-                yield event
+                if update.get("type") == "message":
+                    final_answer = update.get("content")
+                yield update
             
-            # 3. Save Assistant Message
+            # 4. Save Assistant Message
             if final_answer:
                 db.execute(
                     text("""

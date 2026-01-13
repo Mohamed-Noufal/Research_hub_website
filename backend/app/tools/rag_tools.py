@@ -7,6 +7,18 @@ from app.core.rag_engine import RAGEngine
 from app.core.llm_client import LLMClient
 from app.core.cache import cached_tool
 import json
+import re
+
+def strip_think_tags(text: str) -> str:
+    """
+    Strip <think>...</think> tags from Qwen3 model outputs.
+    These are chain-of-thought reasoning tags that shouldn't appear in final output.
+    """
+    if not text:
+        return text
+    # Remove <think>...</think> blocks (including newlines inside)
+    cleaned = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
+    return cleaned.strip()
 
 @cached_tool(ttl=3600)
 async def semantic_search(
@@ -59,7 +71,7 @@ async def semantic_search(
     return result.get('source_nodes', [])
 
 @cached_tool(ttl=3600)
-async def get_paper_sections(
+async def search_paper_sections(
     section_types: List[str],
     paper_ids: Optional[List[int]] = None,
     project_id: Optional[int] = None,
@@ -68,8 +80,10 @@ async def get_paper_sections(
     rag_engine: RAGEngine = None
 ) -> List[Dict]:
     """
-    Retrieves full text of specific sections (Methodology, Results, etc.) 
-    from a list of papers. Use this for structured summaries and comparisons.
+    Semantic search within specific sections (Methodology, Results, etc.) 
+    across papers. Use this for finding relevant content by meaning.
+    
+    NOTE: For exact section retrieval (no search), use literature_tools.get_paper_sections instead.
     """
     if not rag_engine:
         rag_engine = RAGEngine()
@@ -182,15 +196,17 @@ Format as JSON:
     
     # Parse JSON response
     try:
-        # LLM might return Markdown JSON code block
-        cleaned_response = response.replace("```json", "").replace("```", "").strip()
+        # Strip Qwen3 <think> tags and Markdown JSON code block
+        cleaned_response = strip_think_tags(response)
+        cleaned_response = cleaned_response.replace("```json", "").replace("```", "").strip()
         result = json.loads(cleaned_response)
     except:
-        # Fallback parsing
-        sim_part = response
+        # Fallback parsing - also strip think tags
+        clean_resp = strip_think_tags(response)
+        sim_part = clean_resp
         diff_part = ""
-        if "DIFFERENCES" in response:
-            parts = response.split("DIFFERENCES")
+        if "DIFFERENCES" in clean_resp:
+            parts = clean_resp.split("DIFFERENCES")
             sim_part = parts[0].replace("SIMILARITIES", "").replace(":", "").strip()
             diff_part = parts[1].replace(":", "").strip()
             
@@ -206,76 +222,239 @@ async def extract_methodology(
     paper_id: int,
     project_id: Optional[int] = None,
     rag_engine: RAGEngine = None,
-    llm_client: LLMClient = None
+    llm_client: LLMClient = None,
+    max_retries: int = 2,
+    db = None
 ) -> Dict:
     """
-    Extract structured methodology details from a paper
+    Extract structured methodology details from a paper.
+    Uses paper_sections table directly (no RAG chunks needed).
     """
-    if not rag_engine:
-        rag_engine = RAGEngine()
+    from app.schemas.agent_outputs import MethodologyOutput, get_schema_prompt
+    from sqlalchemy import text
+    
     if not llm_client:
         llm_client = LLMClient()
     
-    # Retrieve methodology sections
-    # Searching specifically for "methodology" keywords
-    chunks = await rag_engine.retrieve_only(
-        query_text="methodology methods approach study design",
-        project_id=project_id, # Optimize: filter by paper_id if possible in engine, else filter below
-        top_k=10
-    )
+    # Query paper_sections table directly (works without Celery/RAG)
+    context = ""
+    if db:
+        try:
+            result = db.execute(text("""
+                SELECT section_type, section_title, content 
+                FROM paper_sections 
+                WHERE paper_id = :paper_id 
+                AND section_type IN ('methodology', 'methods', 'abstract', 'introduction', 'other')
+                ORDER BY order_index
+                LIMIT 5
+            """), {'paper_id': paper_id})
+            
+            sections = result.fetchall()
+            if sections:
+                context = "\n\n".join([
+                    f"[{row[0].upper()}] {row[1]}\n{row[2]}" 
+                    for row in sections
+                ])
+        except Exception as e:
+            print(f"Warning: Could not query paper_sections: {e}")
     
-    # Filter by paper_id
-    method_chunks = [
-        c for c in chunks 
-        if c['metadata'].get('paper_id') == paper_id
-    ]
+    # Fallback to RAG if no sections found
+    if not context and rag_engine:
+        chunks = await rag_engine.retrieve_only(
+            query_text="methodology methods approach study design data collection analysis",
+            project_id=project_id,
+            top_k=10
+        )
+        method_chunks = [c for c in chunks if c['metadata'].get('paper_id') == paper_id]
+        context = "\n\n".join([chunk['text'] for chunk in method_chunks])
     
-    if not method_chunks:
+    if not context:
         return {
-            "methodology_summary": "No specific methodology section found.",
+            "methodology_summary": "No methodology content found for this paper.",
             "data_collection": "",
             "analysis_methods": "",
-            "sample_size": ""
+            "sample_size": "",
+            "methodology_context": "",
+            "approach_novelty": ""
         }
     
-    # Build context
-    context = "\n\n".join([chunk['text'] for chunk in method_chunks])
-    
-    # Extract structured data with LLM
+    # Schema-aware prompt - explicitly ask for the 3 main UI fields
     prompt = f"""Extract methodology details from this paper context.
 
 Context:
 {context}
 
-Provide:
-1. METHODOLOGY_SUMMARY: Brief overview (1-2 sentences)
-2. DATA_COLLECTION: How was data collected?
-3. ANALYSIS_METHODS: What analysis techniques were used?
-4. SAMPLE_SIZE: Sample size if mentioned (N=?)
+You MUST extract the following information:
+1. **methodology_summary** (REQUIRED): Describe "The Approach" - what methodology/methods does this paper use?
+2. **methodology_context** (REQUIRED): Describe "Previous Context" - what prior work or approaches does this build upon?
+3. **approach_novelty** (REQUIRED): Explain "Why It's Different" - what makes this approach novel or unique?
+4. **data_collection** (optional): How was data collected?
+5. **analysis_methods** (optional): What analysis techniques were used?
+6. **sample_size** (optional): What was the sample size?
 
-Format as JSON:
-{{
-    "methodology_summary": "...",
-    "data_collection": "...",
-    "analysis_methods": "...",
-    "sample_size": "..."
-}}
+{get_schema_prompt(MethodologyOutput)}
+
+IMPORTANT: Return ONLY valid JSON, no markdown formatting.
 """
     
-    response = await llm_client.complete(prompt, temperature=0.2)
+    # Retry loop with validation
+    last_error = None
+    for attempt in range(max_retries + 1):
+        response = await llm_client.complete(prompt, temperature=0.2)
+        
+        try:
+            # Clean and parse (strip <think> tags from Qwen3 models)
+            cleaned = strip_think_tags(response).strip()
+            if cleaned.startswith('```'):
+                cleaned = cleaned.split('```')[1]
+                if cleaned.startswith('json'):
+                    cleaned = cleaned[4:]
+            cleaned = cleaned.strip()
+            
+            # Validate with Pydantic
+            result = MethodologyOutput.model_validate_json(cleaned)
+            return result.model_dump()
+            
+        except Exception as e:
+            last_error = str(e)
+            if attempt < max_retries:
+                # Add error feedback to prompt for retry
+                prompt = f"""The previous response was invalid: {last_error}
+
+Please try again. Extract methodology details from this paper context.
+
+Context:
+{context}
+
+{get_schema_prompt(MethodologyOutput)}
+
+IMPORTANT: Return ONLY valid JSON, no markdown formatting.
+"""
     
-    try:
-        cleaned_response = response.replace("```json", "").replace("```", "").strip()
-        result = json.loads(cleaned_response)
-    except:
-        result = {
-            "methodology_summary": response,
-            "data_collection": "",
-            "analysis_methods": "",
-            "sample_size": ""
+    # Fallback if all retries fail
+    fallback_summary = strip_think_tags(response)[:500] if response else "Extraction failed"
+    return {
+        "methodology_summary": fallback_summary,
+        "data_collection": "",
+        "analysis_methods": "",
+        "sample_size": "",
+        "_validation_error": last_error
+    }
+
+
+@cached_tool(ttl=86400)
+async def extract_findings(
+    paper_id: int,
+    project_id: Optional[int] = None,
+    rag_engine: RAGEngine = None,
+    llm_client: LLMClient = None,
+    max_retries: int = 2,
+    db = None
+) -> Dict:
+    """
+    Extract structured findings from a paper.
+    Uses paper_sections table directly (no RAG chunks needed).
+    """
+    from app.schemas.agent_outputs import FindingsOutput, get_schema_prompt
+    from sqlalchemy import text
+    
+    if not llm_client:
+        llm_client = LLMClient()
+    
+    # Query paper_sections table directly
+    context = ""
+    if db:
+        try:
+            result = db.execute(text("""
+                SELECT section_type, section_title, content 
+                FROM paper_sections 
+                WHERE paper_id = :paper_id 
+                AND section_type IN ('results', 'discussion', 'conclusion', 'abstract', 'other')
+                ORDER BY order_index
+                LIMIT 5
+            """), {'paper_id': paper_id})
+            
+            sections = result.fetchall()
+            if sections:
+                context = "\n\n".join([
+                    f"[{row[0].upper()}] {row[1]}\n{row[2]}" 
+                    for row in sections
+                ])
+        except Exception as e:
+            print(f"Warning: Could not query paper_sections: {e}")
+    
+    # Fallback to RAG if no sections found
+    if not context and rag_engine:
+        chunks = await rag_engine.retrieve_only(
+            query_text="results findings conclusions key contributions outcomes",
+            project_id=project_id,
+            top_k=10
+        )
+        findings_chunks = [c for c in chunks if c['metadata'].get('paper_id') == paper_id]
+        context = "\n\n".join([chunk['text'] for chunk in findings_chunks])
+    
+    if not context:
+        return {
+            "key_finding": "No findings content found for this paper.",
+            "limitations": "",
+            "custom_notes": "",
+            "evidence_level": None
         }
     
-    return result
+    # Schema-aware prompt
+    prompt = f"""Extract the key findings from this paper context.
+
+Context:
+{context}
+
+{get_schema_prompt(FindingsOutput)}
+
+IMPORTANT: Return ONLY valid JSON, no markdown formatting.
+"""
+    
+    # Retry loop with validation
+    last_error = None
+    for attempt in range(max_retries + 1):
+        response = await llm_client.complete(prompt, temperature=0.2)
+        
+        try:
+            # Clean and parse (strip <think> tags from Qwen3 models)
+            cleaned = strip_think_tags(response).strip()
+            if cleaned.startswith('```'):
+                cleaned = cleaned.split('```')[1]
+                if cleaned.startswith('json'):
+                    cleaned = cleaned[4:]
+            cleaned = cleaned.strip()
+            
+            # Validate with Pydantic
+            result = FindingsOutput.model_validate_json(cleaned)
+            return result.model_dump()
+            
+        except Exception as e:
+            last_error = str(e)
+            if attempt < max_retries:
+                prompt = f"""The previous response was invalid: {last_error}
+
+Please try again. Extract the key findings from this paper context.
+
+Context:
+{context}
+
+{get_schema_prompt(FindingsOutput)}
+
+IMPORTANT: Return ONLY valid JSON, no markdown formatting.
+"""
+    
+    # Fallback if all retries fail
+    fallback_finding = strip_think_tags(response)[:500] if response else "Extraction failed"
+    return {
+        "key_finding": fallback_finding,
+        "limitations": "",
+        "custom_notes": "",
+        "evidence_level": None,
+        "_validation_error": last_error
+    }
+
 
 @cached_tool(ttl=3600)
 async def find_research_gaps(
