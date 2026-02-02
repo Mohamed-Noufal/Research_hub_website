@@ -1,5 +1,5 @@
 # 🔍 AI-Powered Research Paper Search
-   
+    
 **Intelligent semantic search across 9 academic databases with AI query enhancement** 
   
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat&logo=postgresql&logoColor=white)](https://postgresql.org)
@@ -414,6 +414,7 @@ MIT License - see [LICENSE](LICENSE) file for details.
 ---
 
 **Built with ❤️ for the research community**
+
 
 
 
