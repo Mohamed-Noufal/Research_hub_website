@@ -10,7 +10,7 @@
 [![Groq](https://img.shields.io/badge/Groq-FF6B35?style=flat&logo=data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJDMTMuMSAyIDE0IDIuOSAxNCA0VjIwQzE0IDIxLjEgMTMuMSAyMiAxMiAyMkg0QzIuOSAyMiAyIDIxLjEgMiAyMFY0QzIgMi45IDIuOSAyIDQgMkgxMkMxMy4xIDIgMTQgMi45IDE0IDRWNFoiIGZpbGw9IiNGRjZCMzUiLz4KPHBhdGggZD0iTTE4IDhIMTZWMTAuNUMxNiAxMS42IDE2LjkgMTIuNSAxOCA5QzE5LjEgMTIuNSAyMCAxMS42IDIwIDEwLjVWMTAuNUMyMCA5LjQgMTkuMSAxOCA5IDE4SDE4VjE2SDE2VjE4SDE4VjE2WiIgZmlsbD0id2hpdGUiLz4KPC9zdmc+)](https://groq.com)
 
 A comprehensive research paper search platform that combines traditional keyword search with cutting-edge AI semantic search, powered by PostgreSQL + pgvector for enterprise-grade vector similarity search across **9 academic databases** and **6 research categories**.
- 
+  
 ## ✨ Features
 
 ### 🔍 **Intelligent Search System**
@@ -414,6 +414,7 @@ MIT License - see [LICENSE](LICENSE) file for details.
 ---
 
 **Built with ❤️ for the research community**
+
 
 
 
