@@ -1,7 +1,7 @@
 # 🔍 AI-Powered Research Paper Search
           
 **Intelligent semantic search across 9 academic databases with AI query enhancement** 
-           
+            
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat&logo=postgresql&logoColor=white)](https://postgresql.org)
 [![pgvector](https://img.shields.io/badge/pgvector-FF6B35?style=flat)](https://github.com/pgvector/pgvector)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
@@ -414,6 +414,7 @@ MIT License - see [LICENSE](LICENSE) file for details.
 ---
 
 **Built with ❤️ for the research community**
+
 
 
 
