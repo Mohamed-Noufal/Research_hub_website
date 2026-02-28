@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .core.config import settings
 from .core.database import init_db
 from .api.v1 import papers, users, search_history, admin, folders, table_config, methodology, findings, comparison, synthesis, analysis
- 
+  
 # Lifespan context manager for startup/shutdown events
 @asynccontextmanager
 async def lifespan(app: FastAPI):
